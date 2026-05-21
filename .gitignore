@@ -1,0 +1,23 @@
+__pycache__/
+*.py[cod]
+*.pyo
+.env
+env/
+venv/
+.venv/
+
+# trained artefacts (large binaries)
+models/*.pkl
+
+# raw dataset (user-supplied)
+data/*.txt
+data/*.csv
+
+# generated outputs
+logs/*.log
+logs/*.png
+
+# IDE
+.vscode/
+.idea/
+*.swp
