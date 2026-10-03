@@ -1,23 +1,54 @@
+# --- Secrets / local config --------------------------------------------------
+.env
+.env.*
+!.env.example
+
+# --- Python ------------------------------------------------------------------
 __pycache__/
 *.py[cod]
-*.pyo
-.env
-env/
-venv/
+*.egg-info/
 .venv/
+venv/
+env/
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+.coverage
+htmlcov/
 
-# trained artefacts (large binaries)
-models/*.pkl
+# --- Node / Next.js (frontend/ has its own .gitignore as well) -----------------
+node_modules/
+.next/
 
-# raw dataset (user-supplied)
-data/*.txt
-data/*.csv
+# --- Datasets: user-supplied and large, never committed (see data/README.md) ---
+data/raw/
+data/processed/
+*.pcap
+*.pcapng
+!data/samples/*.pcap
+!data/samples/*.pcapng
 
-# generated outputs
-logs/*.log
-logs/*.png
+# --- Model artefacts: versioned bundles live under models/<name>/<version>/ ---
+models/*
+!models/README.md
+# The current bundle is small (~2 MB) and committed so a fresh clone can run
+# inference without the dataset; older or experimental bundles stay local.
+!models/sentinel-flow/
+models/sentinel-flow/*
+!models/sentinel-flow/2026.10.03/
 
-# IDE
+# --- Generated output --------------------------------------------------------
+logs/
+*.log
+
+# --- Legacy prototype's runtime folders --------------------------------------
+legacy/data/
+legacy/models/
+legacy/logs/
+
+# --- Editors / OS ------------------------------------------------------------
 .vscode/
 .idea/
 *.swp
+.DS_Store
+Thumbs.db

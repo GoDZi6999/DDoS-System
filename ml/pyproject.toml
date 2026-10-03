@@ -1,0 +1,32 @@
+# Installable so the Phase 5 ML engine can import the same feature code.
+[build-system]
+requires = ["setuptools>=75"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "sentinel-ml"
+version = "0.1.0"
+description = "SentinelAI flow features, training, evaluation and inference"
+requires-python = ">=3.12"
+
+[tool.setuptools.packages.find]
+include = ["sentinel_ml*"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py312"
+
+[tool.ruff.lint]
+select = ["E", "W", "F", "I", "B", "UP", "S", "RUF", "NPY"]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/**" = ["S101"]
+# The report template is made of long Markdown table rows.
+"sentinel_ml/train.py" = ["E501"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["."]
+addopts = "-ra"
+# Deprecation noise from inside shap/matplotlib, not from this code.
+filterwarnings = ["ignore::PendingDeprecationWarning:shap.*"]

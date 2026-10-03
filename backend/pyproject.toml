@@ -1,0 +1,21 @@
+# Tool configuration only; runtime dependencies are pinned in requirements*.txt.
+
+[tool.ruff]
+line-length = 100
+target-version = "py311"
+
+[tool.ruff.lint]
+select = ["E", "W", "F", "I", "B", "UP", "S", "ASYNC", "RUF"]
+
+[tool.ruff.lint.isort]
+# The local alembic/ migrations folder would otherwise shadow the package.
+known-third-party = ["alembic"]
+
+[tool.ruff.lint.per-file-ignores]
+# Tests assert freely and use fixed, fake credentials.
+"tests/**" = ["S101", "S105", "S106"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["."]
+addopts = "-ra"

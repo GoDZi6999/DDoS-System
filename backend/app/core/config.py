@@ -1,0 +1,63 @@
+"""Runtime configuration, read from environment variables."""
+
+import logging
+import secrets
+from functools import lru_cache
+from typing import Literal
+
+from pydantic import SecretStr, field_validator, model_validator
+from pydantic_settings import BaseSettings
+
+logger = logging.getLogger(__name__)
+
+
+class Settings(BaseSettings):
+    environment: Literal["development", "test", "production"] = "development"
+
+    # Defaults point at services on localhost for running outside Docker;
+    # docker-compose.yml overrides them with the in-network hostnames.
+    database_url: str = "postgresql+asyncpg://sentinel:sentinel@localhost:5432/sentinel"
+    redis_url: str = "redis://localhost:6379/0"
+
+    # HS256 signing key (32+ characters). Required in production; without it a
+    # development server generates an ephemeral key and sessions end on restart.
+    jwt_secret: SecretStr | None = None
+    access_token_minutes: int = 15
+    refresh_token_days: int = 7
+
+    # Failed-login throttling, counted per username and per client IP.
+    login_window_minutes: int = 15
+    login_max_failures_per_user: int = 5
+    login_max_failures_per_ip: int = 20
+
+    # Read once by `python -m app.cli bootstrap` while no user exists yet.
+    initial_admin_username: str = "admin"
+    initial_admin_password: SecretStr | None = None
+
+    @field_validator("jwt_secret", "initial_admin_password", mode="before")
+    @classmethod
+    def _empty_as_unset(cls, value: object) -> object:
+        # docker-compose passes unset variables through as empty strings.
+        return None if value == "" else value
+
+    @model_validator(mode="after")
+    def _check_jwt_secret(self) -> "Settings":
+        if self.jwt_secret is not None and len(self.jwt_secret.get_secret_value()) < 32:
+            raise ValueError("JWT_SECRET must be at least 32 characters")
+        if self.environment == "production" and self.jwt_secret is None:
+            raise ValueError("JWT_SECRET is required when ENVIRONMENT=production")
+        return self
+
+
+@lru_cache
+def get_settings() -> Settings:
+    return Settings()
+
+
+@lru_cache
+def jwt_signing_key() -> str:
+    secret = get_settings().jwt_secret
+    if secret is not None:
+        return secret.get_secret_value()
+    logger.warning("JWT_SECRET is not set: using an ephemeral key, sessions end on restart")
+    return secrets.token_urlsafe(48)
