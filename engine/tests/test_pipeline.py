@@ -82,7 +82,7 @@ def test_traffic_ticks_are_published(predictor):
 
     ticks = [data for kind, data in events if kind == "traffic.tick"]
     assert len(ticks) >= 50
-    assert {"flows_per_s", "packets_per_s", "attacks", "max_risk", "active_flows"} <= set(ticks[0])
+    assert {"flows_per_s", "packets_per_s", "attacks", "attacks_per_s", "max_risk", "active_flows"} <= set(ticks[0])
     assert 5 < sum(t["flows_per_s"] for t in ticks) / len(ticks) < 30  # ~15 benign flows/s
 
 

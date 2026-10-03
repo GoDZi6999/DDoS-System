@@ -98,20 +98,39 @@ function secondsLeft(token: string): number {
   }
 }
 
+// The API treats a reused refresh token as theft and ends the session, but a
+// dashboard fires several requests at once when the access token expires.
+// Concurrent (and slightly late) refreshes of the same token therefore share
+// one API call and its result. This assumes one Next.js server process, which
+// is how the Compose stack runs it.
+const inflight = new Map<string, Promise<TokenPair | null>>();
+const REUSE_MS = 30_000;
+
+function rotate(token: string, forwarded: Record<string, string>): Promise<TokenPair | null> {
+  let pending = inflight.get(token);
+  if (!pending) {
+    pending = fetch(`${API}/api/v1/auth/refresh`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", ...forwarded },
+      body: JSON.stringify({ refresh_token: token }),
+      cache: "no-store",
+    })
+      .then(async (response) => (response.ok ? ((await response.json()) as TokenPair) : null))
+      .catch(() => null);
+    inflight.set(token, pending);
+    setTimeout(() => inflight.delete(token), REUSE_MS).unref?.();
+  }
+  return pending;
+}
+
 async function refresh(): Promise<string | null> {
   const token = (await cookies()).get(REFRESH_COOKIE)?.value;
   if (!token) return null;
-  const response = await fetch(`${API}/api/v1/auth/refresh`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json", ...(await clientHeaders()) },
-    body: JSON.stringify({ refresh_token: token }),
-    cache: "no-store",
-  }).catch(() => null);
-  if (!response?.ok) {
+  const tokens = await rotate(token, await clientHeaders());
+  if (!tokens) {
     await clearSession();
     return null;
   }
-  const tokens = (await response.json()) as TokenPair;
   await storeTokens(tokens);
   return tokens.access_token;
 }

@@ -186,6 +186,7 @@ class Engine:
                 "flows_per_s": round(self._tick["flows"] / span, 2),
                 "packets_per_s": round(self._tick["packets"] / span, 2),
                 "attacks": self._tick["attacks"],
+                "attacks_per_s": round(self._tick["attacks"] / span, 2),
                 "max_risk": self._tick["max_risk"],
                 "active_flows": len(self.table),
             },
