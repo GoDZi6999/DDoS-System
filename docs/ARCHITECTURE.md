@@ -1,7 +1,7 @@
 # SentinelAI — Phase 1 Architecture
 
 Real-Time AI-Powered Network Threat Detection & SOC Platform.
-Status: **design only** — no implementation in this phase.
+Status: **approved** (2026-10-03). Implementation progress is tracked in the root README.
 
 **Claim scope.** SentinelAI *detects and classifies suspicious network traffic in real time and raises risk-scored alerts*. It does not claim to prevent DDoS. Mitigation is a future, opt-in, safeguarded phase (§11).
 
@@ -207,7 +207,7 @@ collector/      capture.py, flow_builder.py, replay.py
 simulator/      benign.py, attacks.py, scenarios/*.yaml
 data/           README (dataset download/cite), samples/ (tiny PCAPs)   # raw data gitignored
 models/         <name>/<version>/…                                      # large binaries gitignored; demo model tracked via LFS or script
-infrastructure/ docker/, prometheus/, grafana/, db/init
+infrastructure/ db/init, prometheus/, grafana/   # each service's Dockerfile lives in its own folder
 tests/          integration/, e2e/, ml-regression/
 docs/           ARCHITECTURE.md, API.md, ML_METHODOLOGY.md, THREAT_MODEL.md, TESTING.md, DEMO.md
 scripts/        train.sh, seed.py, replay_demo.sh, fetch_datasets.sh
@@ -229,13 +229,13 @@ legacy/         current NSL-KDD prototype (temporary)
 | 8 | Docs, screenshots, performance, limitations; optional Prometheus/Grafana | Fresh-clone `docker compose up` demo |
 | 9 (optional) | Policy engine + **dry-run** mitigation with allow-lists, rate caps, human approval | Only after validated false-positive rate |
 
-## 13. Key risks & decisions to confirm
+## 13. Key risks & decisions
 
 1. **Dataset size/licensing:** CIC datasets are tens of GB and must be downloaded by the user; the repo ships only a small sample + a pretrained demo model. *Decision:* train on a documented subset by default.
 2. **Live vs. dataset distribution shift:** models trained on CIC capture conditions may misfire on a home network. *Mitigation:* feature set restricted to live-computable flow stats, cross-dataset eval, and a PCAP-replay + simulator test in the demo.
-3. **Flow-meter choice:** custom Scapy flow builder (full control, slower) vs. CICFlowMeter (feature-compatible, Java). *Recommendation:* Scapy builder replicating the CIC feature definitions; validate against CICFlowMeter on a sample PCAP.
+3. **Flow-meter choice:** custom Scapy flow builder (full control, slower) vs. CICFlowMeter (feature-compatible, Java). *Decided:* Scapy builder replicating the CIC feature definitions; validate against CICFlowMeter on a sample PCAP.
 4. **Scope:** Celery, Prometheus/Grafana, and mitigation are stage-later items; core value is Phases 3–6.
-5. **Naming:** repo is `DDoS-System`; product name **SentinelAI** proposed.
+5. **Naming:** repo is `DDoS-System`; *Decided:* product name **SentinelAI**.
 
 ## 14. Limitations (to be stated in README)
 Detection quality is bounded by training data; encrypted/application-layer attacks are only visible via flow statistics; Scapy throughput limits line-rate capture (suitable for lab/small networks); SHAP explains the model, not ground-truth causality; no prevention is claimed.
