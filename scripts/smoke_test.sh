@@ -30,10 +30,18 @@ ready="$(curl -sS "$BACKEND_URL/health/ready")" || fail "backend unreachable"
 echo "   $ready"
 grep -q '"status":"ready"' <<<"$ready" || fail "a backend dependency is down"
 
-echo "-> frontend           $FRONTEND_URL/"
-page="$(curl -fsS "$FRONTEND_URL/")" || fail "frontend unreachable"
+echo "-> frontend status    $FRONTEND_URL/status"
+page="$(curl -fsS "$FRONTEND_URL/status")" || fail "frontend unreachable"
 grep -q "All systems operational" <<<"$page" \
   || fail "frontend does not report all services online"
+
+echo "-> dashboard requires a session"
+location="$(curl -sS -o /dev/null -w '%{redirect_url}' "$FRONTEND_URL/alerts")"
+[[ "$location" == *"/login?next=%2Falerts" ]] || fail "/alerts did not redirect to login: '$location'"
+code="$(curl -sS -o /dev/null -w '%{http_code}' "$FRONTEND_URL/api/backend/alerts")"
+[[ "$code" == 401 ]] || fail "API proxy without a session returned $code, expected 401"
+code="$(curl -sS -o /dev/null -w '%{http_code}' -X POST "$FRONTEND_URL/api/backend/alerts/1/ack")"
+[[ "$code" == 403 ]] || fail "API proxy accepted a request without the CSRF header ($code)"
 
 if [[ -z "${ADMIN_PASSWORD:-}" ]]; then
   echo "OK: frontend -> backend -> PostgreSQL + Redis"

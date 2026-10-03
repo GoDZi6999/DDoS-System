@@ -29,11 +29,18 @@ function cookieOptions(maxAge: number) {
   };
 }
 
-/** Client IP and user agent, forwarded so the API can throttle and audit per user. */
+/**
+ * Client IP and user agent, forwarded so the API can throttle and audit per
+ * user. Next.js fills X-Forwarded-For from the socket only when the request
+ * has none, so the right-most entry is used: it is the peer address, or the
+ * address added by a reverse proxy in front. A client talking to Next.js
+ * directly can still pick its own value; deployments beyond localhost put a
+ * TLS proxy in front that overwrites the header (docs/SECURITY.md).
+ */
 async function clientHeaders(): Promise<Record<string, string>> {
   const incoming = await headers();
   const forwarded: Record<string, string> = {};
-  const ip = incoming.get("x-forwarded-for")?.split(",")[0]?.trim();
+  const ip = incoming.get("x-forwarded-for")?.split(",").at(-1)?.trim();
   if (ip) forwarded["X-Forwarded-For"] = ip;
   const agent = incoming.get("user-agent");
   if (agent) forwarded["User-Agent"] = agent.slice(0, 256);

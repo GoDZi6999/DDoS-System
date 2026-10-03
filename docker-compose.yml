@@ -76,6 +76,10 @@ services:
       DATABASE_URL: *app-database-url
       REDIS_URL: redis://redis:6379/0
       JWT_SECRET: ${JWT_SECRET:-}
+      # Trust X-Forwarded-For only from the dashboard server (its fixed
+      # address below), so per-IP login throttling and audit entries see the
+      # browser's address instead of the frontend container's.
+      FORWARDED_ALLOW_IPS: 172.28.0.10
     depends_on:
       migrate:
         condition: service_completed_successfully
@@ -151,23 +155,30 @@ services:
     build: ./frontend
     environment:
       API_INTERNAL_URL: http://backend:8000
+      # Set to true when the dashboard is served over HTTPS.
+      COOKIE_SECURE: ${COOKIE_SECURE:-false}
     depends_on:
       backend:
         condition: service_healthy
     ports:
       - "127.0.0.1:${FRONTEND_PORT:-3000}:3000"
     healthcheck:
-      test: ["CMD", "wget", "-q", "--spider", "http://127.0.0.1:3000/"]
+      test: ["CMD", "wget", "-q", "--spider", "http://127.0.0.1:3000/status"]
       interval: 10s
       timeout: 5s
       retries: 6
       start_period: 10s
-    networks: [frontnet]
+    networks:
+      frontnet:
+        ipv4_address: 172.28.0.10
     restart: unless-stopped
 
 networks:
   # Browser-facing tier: frontend and backend.
   frontnet:
+    ipam:
+      config:
+        - subnet: 172.28.0.0/24
   # Data tier: no route to the outside world.
   corenet:
     internal: true
