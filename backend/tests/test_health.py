@@ -1,0 +1,68 @@
+import asyncio
+
+import pytest
+from fastapi.testclient import TestClient
+
+from app.api import health
+from app.main import create_app
+
+
+async def _ok(_client) -> bool:
+    return True
+
+
+async def _refused(_client) -> bool:
+    raise ConnectionError("connection refused by db:5432")
+
+
+async def _hang(_client) -> bool:
+    await asyncio.sleep(10)
+    return True
+
+
+@pytest.fixture
+def client():
+    with TestClient(create_app()) as test_client:
+        yield test_client
+
+
+def test_liveness_does_not_need_dependencies(client):
+    response = client.get("/health")
+
+    assert response.status_code == 200
+    assert response.json() == {"status": "ok"}
+
+
+def test_ready_when_all_dependencies_respond(client, monkeypatch):
+    monkeypatch.setattr(health, "check_database", _ok)
+    monkeypatch.setattr(health, "check_redis", _ok)
+
+    response = client.get("/health/ready")
+
+    assert response.status_code == 200
+    assert response.json() == {"status": "ready", "checks": {"database": "ok", "redis": "ok"}}
+
+
+def test_unavailable_when_a_dependency_fails(client, monkeypatch):
+    monkeypatch.setattr(health, "check_database", _refused)
+    monkeypatch.setattr(health, "check_redis", _ok)
+
+    response = client.get("/health/ready")
+
+    assert response.status_code == 503
+    assert response.json() == {
+        "status": "unavailable",
+        "checks": {"database": "error", "redis": "ok"},
+    }
+    assert "db:5432" not in response.text  # failure details stay in the server log
+
+
+def test_hung_dependency_times_out(client, monkeypatch):
+    monkeypatch.setattr(health, "CHECK_TIMEOUT_S", 0.05)
+    monkeypatch.setattr(health, "check_database", _ok)
+    monkeypatch.setattr(health, "check_redis", _hang)
+
+    response = client.get("/health/ready")
+
+    assert response.status_code == 503
+    assert response.json()["checks"] == {"database": "ok", "redis": "error"}
