@@ -1,0 +1,54 @@
+"""Command line:
+
+python -m sentinel_ml train   --data data/raw/cic-ids2017/MachineLearningCVE
+python -m sentinel_ml predict --bundle models/sentinel-flow/<version> --csv flows.csv
+"""
+
+import argparse
+import json
+import logging
+import sys
+from pathlib import Path
+
+import pandas as pd
+
+
+def main(argv: list[str] | None = None) -> int:
+    parser = argparse.ArgumentParser(prog="python -m sentinel_ml")
+    commands = parser.add_subparsers(dest="command", required=True)
+
+    train = commands.add_parser("train", help="train, evaluate and bundle the models")
+    train.add_argument("--data", type=Path, default=Path("data/raw/cic-ids2017/MachineLearningCVE"))
+    train.add_argument("--models", type=Path, default=Path("models"))
+    train.add_argument("--reports", type=Path, default=Path("ml/reports"))
+    train.add_argument("--cap", type=int, default=150_000, help="max training rows per class")
+    train.add_argument("--cv-cap", type=int, default=20_000, help="max CV rows per class")
+    train.add_argument("--seed", type=int, default=42)
+
+    predict = commands.add_parser("predict", help="classify flows from a CIC-format CSV")
+    predict.add_argument("--bundle", type=Path, required=True)
+    predict.add_argument("--csv", type=Path, required=True)
+    predict.add_argument("--limit", type=int, default=20)
+
+    args = parser.parse_args(argv)
+    logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
+
+    if args.command == "train":
+        from sentinel_ml.train import run
+
+        run(args.data, args.models, args.reports, args.cap, args.cv_cap, args.seed)
+        return 0
+
+    from sentinel_ml import features
+    from sentinel_ml.inference import Predictor
+
+    frame = pd.read_csv(args.csv, encoding="latin-1", nrows=args.limit)
+    frame.columns = [c.strip() for c in frame.columns]
+    predictor = Predictor.from_bundle(args.bundle)
+    for prediction in predictor.predict(features.from_cic(frame)):
+        print(json.dumps({"summary": prediction.summary(), **prediction.__dict__}))
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())
