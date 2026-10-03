@@ -12,6 +12,8 @@ RUN groupadd --system app && useradd --system --gid app --no-create-home app
 COPY requirements.txt .
 RUN pip install -r requirements.txt
 
+COPY alembic.ini ./
+COPY alembic ./alembic
 COPY app ./app
 
 USER app

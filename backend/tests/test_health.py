@@ -1,10 +1,6 @@
 import asyncio
 
-import pytest
-from fastapi.testclient import TestClient
-
 from app.api import health
-from app.main import create_app
 
 
 async def _ok(_client) -> bool:
@@ -18,12 +14,6 @@ async def _refused(_client) -> bool:
 async def _hang(_client) -> bool:
     await asyncio.sleep(10)
     return True
-
-
-@pytest.fixture
-def client():
-    with TestClient(create_app()) as test_client:
-        yield test_client
 
 
 def test_liveness_does_not_need_dependencies(client):
@@ -66,3 +56,10 @@ def test_hung_dependency_times_out(client, monkeypatch):
 
     assert response.status_code == 503
     assert response.json()["checks"] == {"database": "ok", "redis": "error"}
+
+
+def test_ready_against_real_services(client):
+    response = client.get("/health/ready")
+
+    assert response.status_code == 200
+    assert response.json() == {"status": "ready", "checks": {"database": "ok", "redis": "ok"}}
