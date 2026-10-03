@@ -78,8 +78,8 @@ raw dataset ─► clean ─► label map ─► feature engineering ─► spli
 - **Metrics:** confusion matrix, precision/recall/F1 (per class + macro), ROC-AUC (OvR), PR-AUC, inference latency, feature importance. Report cross-dataset results honestly.
 - **Selection:** best macro-F1 subject to a latency budget; recall on attack classes weighted over accuracy.
 - **Explainability:** `shap.TreeExplainer` for tree models; top-5 signed contributions per prediction, normalised to % of total |SHAP|.
-- **Bundle (versioned directory `models/<name>/<semver>/`):**
-  `model.pkl`, `scaler.pkl`, `feature_config.json`, `model_metadata.json` (dataset hash, git SHA, params, metrics, trained_at, library versions), `shap_background.pkl`.
+- **Bundle (versioned directory `models/<name>/<version>/`):**
+  `model.joblib` (Pipeline: shared preprocessing + estimator, so there is no separate scaler file to drift), `background.joblib` (SHAP background), `feature_config.json`, `model_metadata.json` (dataset hash, git SHA, params, metrics, trained_at, library versions, artefact checksums). Implemented in Phase 4; results in [`ML_METHODOLOGY.md`](ML_METHODOLOGY.md).
 - **Anti-skew rule:** preprocessing lives in `FeaturePipeline` (fit at train, serialized with the model, imported unchanged by `ml_engine`). A test asserts feature vectors from the same PCAP are identical via the offline and online paths.
 - **Output contract:** `{label, confidence, class_probs, explanation[], model_version}` → "DDoS detected — confidence 97.4%".
 

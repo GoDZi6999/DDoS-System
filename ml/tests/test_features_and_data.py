@@ -94,6 +94,6 @@ def test_cap_per_class_limits_rows():
     X = pd.DataFrame({"a": range(10)})
     y = pd.Series(["x"] * 8 + ["y"] * 2)
 
-    X_capped, y_capped, _ = data.cap_per_class(X, y, cap=3, seed=0)
+    _, y_capped, _ = data.cap_per_class(X, y, cap=3, seed=0)
 
     assert y_capped.value_counts().to_dict() == {"x": 3, "y": 2}

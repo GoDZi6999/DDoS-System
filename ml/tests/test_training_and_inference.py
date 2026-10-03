@@ -3,8 +3,9 @@ import shutil
 
 import pytest
 
-from sentinel_ml import bundle, data, features
+from sentinel_ml import bundle, data, features, models
 from sentinel_ml.__main__ import main
+from sentinel_ml.explain import Explainer
 from sentinel_ml.inference import Predictor
 
 
@@ -13,7 +14,12 @@ def test_training_writes_a_complete_bundle_and_report(trained_bundle):
     metadata = json.loads((trained_bundle / bundle.METADATA_FILE).read_text())
     report_dir = trained_bundle.parents[2] / "reports" / metadata["version"]
 
-    assert files == {"model.joblib", "background.joblib", "feature_config.json", "model_metadata.json"}
+    assert files == {
+        "model.joblib",
+        "background.joblib",
+        "feature_config.json",
+        "model_metadata.json",
+    }
     assert metadata["algorithm"] in {"logistic_regression", "random_forest", "xgboost"}
     assert set(metadata["candidates"]) == {"logistic_regression", "random_forest", "xgboost"}
     assert metadata["dataset"]["cleaning"]["dropped_exact_duplicates"] == 6
@@ -79,8 +85,27 @@ def test_bundle_with_other_features_is_refused(trained_bundle, tmp_path):
 def test_predict_command(trained_bundle, dataset_dir, capsys):
     csv = sorted(dataset_dir.glob("*.csv"))[0]
 
-    assert main(["predict", "--bundle", str(trained_bundle), "--csv", str(csv), "--limit", "3"]) == 0
+    assert (
+        main(["predict", "--bundle", str(trained_bundle), "--csv", str(csv), "--limit", "3"]) == 0
+    )
 
     lines = capsys.readouterr().out.strip().splitlines()
     assert len(lines) == 3
-    assert {"summary", "label", "confidence", "class_probs", "explanation"} <= set(json.loads(lines[0]))
+    assert {"summary", "label", "confidence", "class_probs", "explanation"} <= set(
+        json.loads(lines[0])
+    )
+
+
+@pytest.mark.parametrize("name", list(models.CANDIDATES))
+def test_every_candidate_can_be_explained(name, dataset_dir):
+    raw, _ = data.load_cic_csvs(sorted(dataset_dir.glob("*.csv")))
+    dataset = data.prepare(raw)
+    y = dataset.labels.map({c: i for i, c in enumerate(data.CLASSES)}).to_numpy()
+    pipeline = models.fit(models.CANDIDATES[name](0), dataset.features, y)
+    explainer = Explainer(pipeline, dataset.features.head(50))
+
+    importance = explainer.global_importance(dataset.features.head(20))
+    explanations = explainer.explain(dataset.features.head(3), y[:3])
+
+    assert importance.index[0] in features.FEATURE_NAMES
+    assert len(explanations) == 3

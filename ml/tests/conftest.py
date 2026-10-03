@@ -27,8 +27,18 @@ FILES = {
 SIGNATURE = {  # class-specific shift of the log-mean, per column (seeded)
     label: np.random.default_rng(i).normal(0, 2.5, len(CIC_COLUMNS))
     for i, label in enumerate(
-        ["BENIGN", "DDoS", "DoS Hulk", "DoS slowloris", "PortScan", "FTP-Patator",
-         "SSH-Patator", "Web Attack � Brute Force", "Bot", "Infiltration"]
+        [
+            "BENIGN",
+            "DDoS",
+            "DoS Hulk",
+            "DoS slowloris",
+            "PortScan",
+            "FTP-Patator",
+            "SSH-Patator",
+            "Web Attack � Brute Force",
+            "Bot",
+            "Infiltration",
+        ]
     )
 }
 

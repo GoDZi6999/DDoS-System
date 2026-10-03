@@ -292,6 +292,17 @@ def render_report(
         "Expect lower scores on live traffic until it is validated there.",
         "- CIC-IDS2017 has documented labelling and flow-construction errors "
         "(Engelen et al., 2021).",
+        "- Cross-validation runs on class-capped (balanced) data while the test set keeps the "
+        "real mix (mostly benign), so rare-class precision is lower on test: even a 0.1% "
+        "false-positive rate on hundreds of thousands of benign flows outnumbers a few hundred "
+        "attack flows. The test numbers are the realistic ones.",
+        "- Port scans and botnet traffic are poorly separated per flow: deduplication shows most "
+        "scan probes are feature-identical to each other and close to short benign flows. They "
+        "are patterns across flows (one source, many ports or hosts), which needs the "
+        "window-level features planned for the real-time engine (Phase 5).",
+        "- TCP initial window sizes rank highest; they partly reflect the operating systems in "
+        "the CIC testbed and may not transfer to other networks (an ablation without them is a "
+        "planned check).",
         "- Rare classes (botnet, web attacks) have few test flows, so their scores are noisy.",
         "- Port numbers are deliberately not used as features, to stop the model learning "
         '"port 80 = attack" shortcuts specific to this dataset.',

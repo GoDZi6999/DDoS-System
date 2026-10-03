@@ -25,6 +25,9 @@ class FlowPreprocessor(BaseEstimator, TransformerMixin):
     def fit(self, X: pd.DataFrame, y=None) -> "FlowPreprocessor":
         return self
 
+    def __sklearn_is_fitted__(self) -> bool:
+        return True  # stateless: usable without fitting (e.g. as a sliced pipeline step)
+
     def transform(self, X: pd.DataFrame) -> np.ndarray:
         values = X[list(FEATURE_NAMES)].to_numpy(dtype=np.float64)
         return np.sign(values) * np.log1p(np.abs(values))

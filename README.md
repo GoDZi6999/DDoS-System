@@ -14,7 +14,14 @@ Live traffic / PCAP replay -> Flow builder -> Feature extraction -> ML engine (R
 ```
 
 Documentation: [architecture](docs/ARCHITECTURE.md) · [API](docs/API.md) ·
-[security controls](docs/SECURITY.md) · [datasets](data/README.md).
+[security controls](docs/SECURITY.md) · [ML methodology](docs/ML_METHODOLOGY.md) ·
+[datasets](data/README.md).
+
+**Current model** (XGBoost on CIC-IDS2017, held-out test set of 652,904 flows):
+99.48% accuracy, 99.27% of attack flows detected, 0.20% of benign flows
+flagged, ~1 ms per flow, with a SHAP explanation for every attack. Port scans
+and botnet traffic are the weak spot per flow; see the
+[report](ml/reports/2026.10.03/report.md) for per-class results and caveats.
 
 ## Status
 
@@ -23,8 +30,8 @@ Documentation: [architecture](docs/ARCHITECTURE.md) · [API](docs/API.md) ·
 | 1 | Architecture | ✅ Done |
 | 2 | Repository skeleton, Docker Compose, CI | ✅ Done |
 | 3 | Backend: auth/RBAC, database, alert engine + workflow, audit log, WebSocket | ✅ Done |
-| 4 | ML pipeline: CIC datasets, LR / RF / XGBoost, evaluation, SHAP, model bundles | ⏳ Next |
-| 5 | Real-time engine: Scapy collector, PCAP replay, lab simulator, risk engine | ⏳ |
+| 4 | ML pipeline: CIC-IDS2017, LR / RF / XGBoost, evaluation, SHAP, model bundles | ✅ Done |
+| 5 | Real-time engine: Scapy collector, PCAP replay, lab simulator, risk engine | ⏳ Next |
 | 6 | SOC dashboard on the live API | ⏳ |
 | 7 | Notifications and background workers | ⏳ |
 | 8 | Documentation, performance, optional monitoring | ⏳ |
@@ -49,7 +56,7 @@ prints a new one (and records the reset in the audit log).
 | <http://localhost:8000/docs> | API documentation; **Authorize** with `admin` and the password above |
 | <http://localhost:8000/health/ready> | Readiness of PostgreSQL and Redis |
 
-Until the ML engine (Phase 4/5) exists, you can push clearly labelled
+Until the real-time engine (Phase 5) exists, you can push clearly labelled
 synthetic detections through the real pipeline and watch an alert appear in
 `GET /api/v1/alerts`:
 
@@ -82,11 +89,11 @@ To set an admin password, a JWT signing key, database passwords or ports:
 ```
 backend/          FastAPI service (REST, WebSocket, auth, alerts) + alert-engine worker
 frontend/         Next.js SOC dashboard
-ml/               training, evaluation, shared feature code, inference   (Phase 4)
+ml/               sentinel_ml: shared features, training, evaluation, SHAP, inference
 collector/        Scapy capture, PCAP replay, flow builder               (Phase 5)
 simulator/        safe lab traffic generator                             (Phase 5)
 data/             dataset instructions; raw data is never committed
-models/           versioned model bundles (not committed)
+models/           versioned model bundles (current one committed, ~2 MB)
 infrastructure/   shared infra config (DB init, monitoring)
 tests/            cross-service integration / E2E / ML-regression tests
 scripts/          smoke test and helper scripts

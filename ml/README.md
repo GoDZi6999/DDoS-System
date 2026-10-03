@@ -49,8 +49,8 @@ PYTHONPATH=ml python -m sentinel_ml predict \
   --bundle models/sentinel-flow/<version> \
   --csv data/raw/cic-ids2017/MachineLearningCVE/Friday-WorkingHours-Afternoon-DDos.pcap_ISCX.csv \
   --limit 5
-# {"summary": "ddos detected — confidence 99.8%", "label": "ddos", "confidence": 0.998,
-#  "class_probs": {...}, "explanation": [{"feature": "bwd_pkt_len_mean", "weight": 31.2, ...}]}
+# {"summary": "ddos detected — confidence 100.0%", "label": "ddos", "confidence": 1.0,
+#  "class_probs": {...}, "explanation": [{"feature": "bwd_bytes", "weight": 31.8, ...}]}
 ```
 
 From Python (what the Phase 5 ML engine will do):
