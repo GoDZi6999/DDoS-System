@@ -111,41 +111,48 @@ NEW → INVESTIGATING → CONTAINED → RESOLVED     (+ FALSE_POSITIVE from any 
 
 ## 6. Database schema (PostgreSQL)
 
+Implemented in Phase 3 (migration `backend/alembic/versions/0001_initial_schema.py`):
+
 ```
-users(id, username UNIQUE, email, password_hash, role, is_active, created_at, last_login)
-models(id, name, version, algo, path, metrics JSONB, is_active, trained_at, dataset)
-network_events(id BIGSERIAL, ts, src_ip INET, dst_ip INET, src_port, dst_port, protocol,
-               pkts, bytes, duration, pps, bps, features JSONB, source ENUM(live,pcap,sim))
-predictions(id BIGSERIAL, event_id FK, model_id FK, label, confidence, class_probs JSONB,
-            explanation JSONB, risk_score, risk_components JSONB, severity, ts)
-alerts(id, ts, updated_at, source_ip, destination_ip, protocol, attack_type, confidence,
-       risk_score, severity, status, description, pps_peak, bps_peak, detection_count,
-       recommended_action, assigned_to FK, acknowledged_by FK, acknowledged_at, resolved_at)
-alert_events(alert_id FK, event_id FK)            -- aggregation link
-alert_notes(id, alert_id, user_id, note, ts)
-attack_statistics(bucket_ts, interval, attack_type, count, max_risk, total_pkts, total_bytes)
-audit_logs(id, ts, user_id, username, action, entity_type, entity_id, before JSONB, after JSONB, ip, user_agent)
-system_logs(id, ts, level, component, message, context JSONB)
-settings(key, value JSONB, updated_by, updated_at)  -- thresholds, risk weights, notification rules
+users(id, username UNIQUE, email UNIQUE, password_hash, role, is_active, token_version,
+      created_at, updated_at, last_login_at)
+refresh_tokens(id, user_id FK, token_hash UNIQUE, family_id, created_at, expires_at, revoked_at)
+network_events(id, stream_id UNIQUE, ts, src_ip INET, dst_ip INET, src_port, dst_port, protocol,
+               packet_count, byte_count, duration, packets_per_sec, bytes_per_sec,
+               features JSONB, source)                      -- source: live | pcap | sim
+predictions(id, event_id FK UNIQUE, model_version, label, confidence, class_probs JSONB,
+            explanation JSONB, risk_score, risk_components JSONB, severity, created_at)
+alerts(id, created_at, updated_at, first_seen_at, last_seen_at, attack_type, source_ip,
+       destination_ip, destination_port, protocol, confidence, risk_score, severity, status,
+       description, recommended_action, detection_count, peak_packets_per_sec,
+       peak_bytes_per_sec, explanation JSONB, risk_components JSONB, model_version,
+       assigned_to_id FK, acknowledged_by_id FK, acknowledged_at, resolved_at)
+alert_events(alert_id FK, event_id FK)                     -- aggregation link
+alert_notes(id, alert_id FK, author_id FK, body, created_at)
+audit_logs(id, ts, actor_id FK, actor, action, entity_type, entity_id,
+           before JSONB, after JSONB, ip INET, user_agent)
+settings(key, value JSONB, updated_by_id FK, updated_at)   -- detection thresholds, risk weights
 ```
-Indexes: `alerts(status, severity, ts DESC)`, `network_events(ts)`, `predictions(event_id)`, `audit_logs(ts, user_id)`. `network_events`/`predictions` partitioned by day with retention job. `audit_logs` is append-only (no UPDATE/DELETE grants for the app role).
+Planned: `models` (Phase 4 registry; `predictions.model_version` then references it) and `attack_statistics` (Phase 7 rollups, only if stats on the raw tables get slow). Application logs go to container stdout rather than a `system_logs` table.
+
+Indexes: `alerts(status, last_seen_at)`, `alerts(attack_type, destination_ip, status)` for correlation, `network_events(ts)`, `network_events(dst_ip, ts)`, `predictions(label)`, `audit_logs(ts)`, `audit_logs(entity_type, entity_id)`. Day partitioning and retention for `network_events`/`predictions` are planned for Phase 7. `audit_logs` is append-only: a trigger rejects UPDATE, DELETE and TRUNCATE, and the API connects as a non-owner role that cannot disable it.
 
 ## 7. API specification (FastAPI, `/api/v1`, OpenAPI at `/docs`)
 
 | Group | Endpoints | Min role |
 |---|---|---|
-| Auth | `POST /auth/login`, `POST /auth/refresh`, `POST /auth/logout`, `GET /auth/me` | public / any |
-| Users | `GET/POST /users`, `PATCH/DELETE /users/{id}` | Admin |
-| Alerts | `GET /alerts` (filter: status, severity, type, ip, time; paginated), `GET /alerts/{id}`, `PATCH /alerts/{id}/status`, `POST /alerts/{id}/notes`, `POST /alerts/{id}/ack` | Viewer read; Analyst write |
+| Auth | `POST /auth/login`, `POST /auth/refresh`, `POST /auth/logout`, `GET /auth/me`, `POST /auth/password` | public / any |
+| Users | `GET/POST /users`, `GET/PATCH /users/{id}` (users are deactivated, never deleted) | Admin |
+| Alerts | `GET /alerts` (filter: status, severity, type, ip, time; paginated), `GET /alerts/{id}`, `GET /alerts/{id}/events`, `PATCH /alerts/{id}/status`, `POST /alerts/{id}/notes`, `POST /alerts/{id}/ack`, `PUT /alerts/{id}/assignee` | Viewer read; Analyst write |
 | Events | `GET /events`, `GET /events/{id}` (with prediction + SHAP) | Viewer |
 | Stats | `GET /stats/summary` (events, attacks, blocked/contained, current risk), `GET /stats/timeseries`, `GET /stats/distribution` | Viewer |
-| Detection | `POST /detect` (single flow, debug/demo), `GET/PUT /config/detection` (threshold, weights), `GET /models`, `POST /models/{id}/activate` | Analyst (detect) / Admin (config) |
-| Ingest control | `POST /replay` (PCAP upload + speed), `POST /simulator/start|stop`, `GET /collector/status` | Admin |
+| Detection | `GET/PUT /config/detection` (threshold, window, risk weights); planned: `POST /detect`, `GET /models`, `POST /models/{id}/activate` (Phase 4/5) | Analyst read / Admin write |
+| Ingest control | planned (Phase 5): `POST /replay` (PCAP upload + speed), `POST /simulator/start|stop`, `GET /collector/status` | Admin |
 | Audit | `GET /audit` | Admin |
-| Ops | `GET /health`, `GET /metrics` (Prometheus) | internal |
-| Realtime | `WS /ws?token=…` — topics `alert.new`, `alert.updated`, `stats.tick`, `traffic.tick` | Viewer |
+| Ops | `GET /health`, `GET /health/ready`; planned: `GET /metrics` (Phase 8) | internal |
+| Realtime | `WS /api/v1/ws`, authenticated by its first message (no token in the URL) — `alert.new`, `alert.updated`; planned: `stats.tick`, `traffic.tick` (Phase 5) | Viewer |
 
-Conventions: JSON, ISO-8601 UTC, cursor/offset pagination, RFC 7807-style errors, request-id header.
+Conventions: JSON, ISO-8601 timestamps (a timezone is required on input), limit/offset pagination returning `{items, total, limit, offset}`, errors as FastAPI's `{"detail": ...}`. Full reference: [`API.md`](API.md).
 
 ## 8. Frontend architecture (Next.js App Router + Tailwind + Recharts)
 
@@ -160,11 +167,11 @@ app/
 lib/api.ts  lib/ws.ts (reconnecting WS client)  lib/auth.ts
 components/  hooks/useLiveAlerts  state: TanStack Query + WS-driven cache updates
 ```
-No mock data in production code: every widget reads from the API/WS. A `NEXT_PUBLIC_DEMO` mode only toggles the *simulator* on the backend. Route guards by role; tokens in httpOnly cookies (preferred) to limit XSS exposure.
+No mock data in production code: every widget reads from the API/WS. A `NEXT_PUBLIC_DEMO` mode only toggles the *simulator* on the backend. Route guards by role. The API issues bearer tokens; the dashboard will keep them server-side in httpOnly cookies through a Next.js backend-for-frontend layer, so browser JavaScript never holds them.
 
 ## 9. Security architecture
 
-**Authentication/authorisation:** bcrypt/argon2 hashes; short-lived access JWT (15 min) + rotating refresh token; RBAC dependency on every route (Admin / Analyst / Viewer); login rate limiting and lockout; WS authenticates on connect.
+**Authentication/authorisation:** argon2id password hashes; 15-minute HS256 access JWT carrying a per-user token version (bumped on password change, deactivation or token theft) + 7-day rotating refresh tokens stored as SHA-256 digests, with reuse detection that ends the whole session family; role and active status re-read from the database on every request; RBAC dependency on every route (Admin / Analyst / Viewer); failed-login throttling per username and per IP in Redis; the WebSocket authenticates with its first message. Details: [`SECURITY.md`](SECURITY.md).
 **Audit:** middleware + service-level hooks log login/logout, status changes, acknowledgements, config changes, user management, model activation, PCAP/simulator control; entries are append-only and include actor, before/after, IP.
 **Hardening:** secrets only via env (`.env.example`, no defaults for JWT secret in prod), strict CORS, security headers, Pydantic validation, parameterised SQL, upload limits + PCAP size/type checks, CSP on frontend, dependency scanning in CI.
 **Capture privilege:** only the collector container gets `NET_RAW`/`NET_ADMIN`; it has no DB credentials.
@@ -173,7 +180,7 @@ No mock data in production code: every widget reads from the API/WS. A `NEXT_PUB
 ### Threat model (STRIDE summary)
 | Threat | Example | Control |
 |---|---|---|
-| Spoofing | Stolen/forged JWT | Short TTL, signature, refresh rotation, httpOnly cookies |
+| Spoofing | Stolen/forged JWT | Short TTL, signature + issuer/audience checks, refresh rotation with reuse detection, BFF-held httpOnly cookies (Phase 6) |
 | Tampering | Analyst edits audit log; poisoned PCAP | Append-only audit table; PCAP parsed in sandboxed worker with limits |
 | Repudiation | "I didn't resolve that alert" | Audit log with actor/IP |
 | Info disclosure | Viewer reads config/users | RBAC per route; field-level filtering |
