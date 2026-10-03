@@ -8,8 +8,9 @@
 # INITIAL_ADMIN_PASSWORD is unset, the generated password is printed once:
 #   docker compose logs migrate
 #
-# Services added in later phases: ml-engine and collector (Phase 5),
-# worker (Phase 7), simulator on an isolated lab network (Phase 5).
+# The engine runs simulated lab traffic by default (nothing is sent on any
+# network). ENGINE_SCENARIO=demo cycles through attacks; see engine/README.md
+# for PCAP replay and live capture. Services added later: worker (Phase 7).
 
 name: sentinelai
 
@@ -118,6 +119,33 @@ services:
       retries: 3
       start_period: 15s
     networks: [corenet]
+
+  # Real-time engine: traffic -> flows -> ML + rules -> risk -> detections.
+  engine:
+    build:
+      context: .
+      dockerfile: engine/Dockerfile
+    image: sentinelai-engine:latest
+    environment:
+      REDIS_URL: redis://redis:6379/0
+      ENGINE_SCENARIO: ${ENGINE_SCENARIO:-normal}
+    depends_on:
+      redis:
+        condition: service_healthy
+      alert-engine:
+        condition: service_healthy
+    healthcheck:
+      test:
+        - CMD
+        - python
+        - -c
+        - "import os, sys, time; sys.exit(time.time() - os.path.getmtime('/tmp/sentinel-engine.heartbeat') > 30)"
+      interval: 10s
+      timeout: 3s
+      retries: 3
+      start_period: 30s
+    networks: [corenet]
+    restart: unless-stopped
 
   frontend:
     build: ./frontend

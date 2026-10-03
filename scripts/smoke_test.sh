@@ -52,19 +52,31 @@ role="$(curl -fsS "${auth[@]}" "$BACKEND_URL/api/v1/auth/me" | json_field '["rol
 unauthenticated="$(curl -s -o /dev/null -w '%{http_code}' "$BACKEND_URL/api/v1/alerts")"
 [[ "$unauthenticated" == "401" ]] || fail "alerts readable without a token ($unauthenticated)"
 
-echo "-> synthetic detections -> alert engine -> alert"
-target="203.0.113.$((RANDOM % 200 + 20))"
-docker compose exec -T alert-engine \
-  python -m app.cli demo-detections --count 10 --target "$target" >/dev/null
+echo "-> engine is classifying traffic"
 for _ in $(seq 1 30); do
-  found="$(curl -fsS "${auth[@]}" "$BACKEND_URL/api/v1/alerts?ip=$target" \
-    | json_field '["total"]')"
+  events="$(curl -fsS "${auth[@]}" "$BACKEND_URL/api/v1/stats/summary?window=1h" \
+    | json_field '["events"]')"
+  [[ "$events" -ge 1 ]] && break
+  sleep 2
+done
+[[ "${events:-0}" -ge 1 ]] || fail "no flows reached the database"
+echo "   $events flows analysed"
+
+echo "-> simulated DDoS -> ML engine -> risk -> alert engine -> alert"
+target="10.20.0.10"  # the simulator's web server
+docker compose exec -T engine \
+  python -m sentinel_engine inject --scenario ddos --duration 10 >/dev/null
+query="$BACKEND_URL/api/v1/alerts?ip=$target&attack_type=ddos"
+for _ in $(seq 1 30); do
+  found="$(curl -fsS "${auth[@]}" "$query" | json_field '["total"]')"
   [[ "$found" -ge 1 ]] && break
   sleep 1
 done
-[[ "${found:-0}" -ge 1 ]] || fail "no alert raised for $target"
-alert="$(curl -fsS "${auth[@]}" "$BACKEND_URL/api/v1/alerts?ip=$target" | json_field '["items"][0]')"
-echo "   $alert"
+[[ "${found:-0}" -ge 1 ]] || fail "no DDoS alert raised for $target"
+alert_id="$(curl -fsS "${auth[@]}" "$query" | json_field '["items"][0]["id"]')"
+detail="$(curl -fsS "${auth[@]}" "$BACKEND_URL/api/v1/alerts/$alert_id")"
+echo "   $(json_field '["description"]' <<<"$detail") (risk $(json_field '["risk_score"]' <<<"$detail"), $(json_field '["severity"]' <<<"$detail"))"
+grep -q '"model_version":"sentinel-flow-' <<<"$detail" || fail "alert not produced by the trained model"
 
 echo "-> audit log is append-only for the application role"
 app_user="${APP_DB_USER:-sentinel_app}"
@@ -77,4 +89,4 @@ entries="$(curl -fsS "${auth[@]}" "$BACKEND_URL/api/v1/audit?action=auth.login" 
   | json_field '["total"]')"
 [[ "$entries" -ge 1 ]] || fail "login was not audited"
 
-echo "OK: stack healthy, auth + RBAC, detection pipeline and audit trail verified"
+echo "OK: stack healthy, auth + RBAC, ML detection pipeline and audit trail verified"

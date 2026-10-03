@@ -147,6 +147,7 @@ ws.onmessage = (msg) => {
   const event = JSON.parse(msg.data);
   // {type: "auth.ok", user: {...}}  then
   // {type: "alert.new" | "alert.updated", data: <alert list item>}
+  // {type: "traffic.tick", data: {ts, flows_per_s, packets_per_s, attacks, max_risk, active_flows}}
 };
 ws.onclose = (e) => { if (e.code === 4401) { /* refresh the token, reconnect */ } };
 ```
@@ -158,9 +159,12 @@ ws.onclose = (e) => { if (e.code === 4401) { /* refresh the token, reconnect */ 
 
 ## Detection stream (ML engine → alert engine)
 
-Producers (the Phase 5 ML engine; `python -m app.cli demo-detections` for
-testing) append to the Redis stream **`sentinel:detections`**, one entry per
-analysed flow, with a single field `data` containing JSON:
+Producers (the real-time engine in `engine/`; `python -m app.cli demo-detections`
+for testing) append to the Redis stream **`sentinel:detections`**, one entry per
+analysed flow, with a single field `data` containing JSON. The machine-readable
+contract is [`schemas/detection.schema.json`](schemas/detection.schema.json):
+the backend tests check it matches the model, the engine tests validate their
+output against it.
 
 ```json
 {
@@ -180,6 +184,10 @@ analysed flow, with a single field `data` containing JSON:
   "model_version": "xgb-2026.10.1"
 }
 ```
+
+Detection settings changed through `PUT /config/detection` are mirrored to
+the Redis key `sentinel:config:detection`, where the engine reads its risk
+weights.
 
 Rules (`backend/app/schemas/detection.py`): unknown fields are rejected;
 `protocol` ∈ `tcp|udp|icmp|other`; `source` ∈ `live|pcap|sim`; `label` matches

@@ -31,7 +31,9 @@ def main(argv: list[str] | None = None) -> int:
     predict.add_argument("--limit", type=int, default=20)
 
     export = commands.add_parser("export-profiles", help="sample held-out flows for the demo")
-    export.add_argument("--data", type=Path, default=Path("data/raw/cic-ids2017/MachineLearningCVE"))
+    export.add_argument(
+        "--data", type=Path, default=Path("data/raw/cic-ids2017/MachineLearningCVE")
+    )
     export.add_argument("--out", type=Path, default=Path("data/samples/flow_profiles.csv"))
 
     args = parser.parse_args(argv)

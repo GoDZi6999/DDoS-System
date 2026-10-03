@@ -52,16 +52,16 @@ Design principles:
 
 | Component | Responsibility | Tech |
 |---|---|---|
-| `collector` | Sniff interface or replay PCAP (with speed factor); emit packet records | Scapy (AsyncSniffer / `rdpcap` iterator) |
-| `flow_builder` | Aggregate packets to bidirectional flows by 5-tuple; idle/active timeouts; emit finished + periodic partial flows (so floods are seen *during* the attack) | Python, in-memory table with LRU cap |
-| `feature_extractor` | Flow → fixed feature vector (shared with training) | Python package `sentinel_features` |
-| `ml_engine` | Load versioned model bundle; predict class + probability; SHAP top-k; publish detection | scikit-learn, XGBoost, SHAP |
-| `risk_engine` | Combine signals into 0–100 score and severity | Pure Python, config-driven weights |
+| `engine` (sources) | Sniff an interface or replay a PCAP (speed factor, retimed), or run the safe simulator | Scapy (AsyncSniffer / PcapReader) |
+| `engine` (flow builder) | Aggregate packets to bidirectional flows by 5-tuple; RST/FIN, idle and active timeouts; CICFlowMeter-style features | Python |
+| `sentinel_ml.features` | Flow → fixed feature vector (shared with training) | Python package in `ml/` |
+| `engine` (classifier + rules) | Versioned model bundle → class, probability, SHAP top-5; window rule for port scans | scikit-learn, XGBoost, SHAP |
+| `engine` (risk) | Combine signals into 0–100 score; baseline frozen during attacks | Pure Python, weights from the settings API via Redis |
 | `alert_service` | Dedupe/aggregate detections into alerts; state machine; notifications | FastAPI service module + Redis |
 | `api` | REST, WebSocket, JWT, RBAC, audit | FastAPI, SQLAlchemy 2, Alembic |
 | `worker` | Notifications, retention, statistics rollups, retraining jobs | Celery + Redis |
 | `frontend` | SOC dashboard | Next.js, Tailwind, Recharts |
-| `simulator` | Benign + attack traffic generator for the lab | Scapy / pure-Python sockets on isolated Docker network |
+| `engine` (simulator) | Benign + attack traffic for demos, in-process (sends nothing); attack statistics from held-out CIC-IDS2017 flows | Python |
 
 **Alert aggregation:** a flood produces thousands of flow detections. Alerts are keyed by `(attack_type, dst_ip, time_window)`; detections attach to an open alert and update its counters, peak pps/bps, and max risk. Prevents alert storms and keeps the DB small.
 
@@ -147,7 +147,7 @@ Indexes: `alerts(status, last_seen_at)`, `alerts(attack_type, destination_ip, st
 | Events | `GET /events`, `GET /events/{id}` (with prediction + SHAP) | Viewer |
 | Stats | `GET /stats/summary` (events, attacks, blocked/contained, current risk), `GET /stats/timeseries`, `GET /stats/distribution` | Viewer |
 | Detection | `GET/PUT /config/detection` (threshold, window, risk weights); planned: `POST /detect`, `GET /models`, `POST /models/{id}/activate` (Phase 4/5) | Analyst read / Admin write |
-| Ingest control | planned (Phase 5): `POST /replay` (PCAP upload + speed), `POST /simulator/start|stop`, `GET /collector/status` | Admin |
+| Ingest control | Engine CLI for now (`python -m sentinel_engine run|inject`, see `engine/README.md`); API control endpoints deferred | Admin |
 | Audit | `GET /audit` | Admin |
 | Ops | `GET /health`, `GET /health/ready`; planned: `GET /metrics` (Phase 8) | internal |
 | Realtime | `WS /api/v1/ws`, authenticated by its first message (no token in the URL) — `alert.new`, `alert.updated`; planned: `stats.tick`, `traffic.tick` (Phase 5) | Viewer |
@@ -210,8 +210,7 @@ Networks: `frontnet` (frontend↔backend), `corenet` (backend↔db↔redis↔ml)
 backend/        app/{api,core,models,schemas,services,ws}, alembic/, tests/
 frontend/       app/, components/, lib/, e2e/ (Playwright)
 ml/             sentinel_features/ (shared), training/, evaluation/, inference/, notebooks/
-collector/      capture.py, flow_builder.py, replay.py
-simulator/      benign.py, attacks.py, scenarios/*.yaml
+engine/         sentinel_engine: sources (live, pcap, simulator), flows, window rule, risk, pipeline
 data/           README (dataset download/cite), samples/ (tiny PCAPs)   # raw data gitignored
 models/         <name>/<version>/…                                      # large binaries gitignored; demo model tracked via LFS or script
 infrastructure/ db/init, prometheus/, grafana/   # each service's Dockerfile lives in its own folder

@@ -31,8 +31,8 @@ and botnet traffic are the weak spot per flow; see the
 | 2 | Repository skeleton, Docker Compose, CI | ✅ Done |
 | 3 | Backend: auth/RBAC, database, alert engine + workflow, audit log, WebSocket | ✅ Done |
 | 4 | ML pipeline: CIC-IDS2017, LR / RF / XGBoost, evaluation, SHAP, model bundles | ✅ Done |
-| 5 | Real-time engine: Scapy collector, PCAP replay, lab simulator, risk engine | ⏳ Next |
-| 6 | SOC dashboard on the live API | ⏳ |
+| 5 | Real-time engine: flow builder, PCAP replay, live capture, simulator, port-scan rule, risk engine | ✅ Done |
+| 6 | SOC dashboard on the live API | ⏳ Next |
 | 7 | Notifications and background workers | ⏳ |
 | 8 | Documentation, performance, optional monitoring | ⏳ |
 
@@ -56,13 +56,16 @@ prints a new one (and records the reset in the audit log).
 | <http://localhost:8000/docs> | API documentation; **Authorize** with `admin` and the password above |
 | <http://localhost:8000/health/ready> | Readiness of PostgreSQL and Redis |
 
-Until the real-time engine (Phase 5) exists, you can push clearly labelled
-synthetic detections through the real pipeline and watch an alert appear in
-`GET /api/v1/alerts`:
+The real-time engine starts with simulated lab traffic (nothing is sent on
+any network). Trigger an attack and watch the alert appear in
+`GET /api/v1/alerts`, or run the whole demo story on a loop:
 
 ```bash
-docker compose exec alert-engine python -m app.cli demo-detections --count 20
+docker compose exec engine python -m sentinel_engine inject --scenario ddos --duration 20
+ENGINE_SCENARIO=demo docker compose up -d engine     # normal -> DDoS -> port scan -> ...
 ```
+
+PCAP replay and live capture are described in [`engine/README.md`](engine/README.md).
 
 Check the whole stack with `ADMIN_PASSWORD=… ./scripts/smoke_test.sh`. Stop it
 with `docker compose down` (add `-v` to delete the database volume as well).
@@ -90,8 +93,7 @@ To set an admin password, a JWT signing key, database passwords or ports:
 backend/          FastAPI service (REST, WebSocket, auth, alerts) + alert-engine worker
 frontend/         Next.js SOC dashboard
 ml/               sentinel_ml: shared features, training, evaluation, SHAP, inference
-collector/        Scapy capture, PCAP replay, flow builder               (Phase 5)
-simulator/        safe lab traffic generator                             (Phase 5)
+engine/           real-time engine: capture/replay/simulator, flow builder, rules, risk
 data/             dataset instructions; raw data is never committed
 models/           versioned model bundles (current one committed, ~2 MB)
 infrastructure/   shared infra config (DB init, monitoring)

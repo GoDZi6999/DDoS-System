@@ -105,7 +105,10 @@ Per class (XGBoost, test set):
   outnumbers 556 scan flows. A scan is a pattern *across* flows (one source,
   many ports), so the fix is window-level features (distinct destination
   ports/hosts per source, flows per second per destination), planned for the
-  real-time engine in Phase 5, rather than more per-flow tuning.
+  real-time engine, rather than more per-flow tuning. The engine now adds an
+  explicit rule on top of the classifier: one source reaching 20+ distinct
+  ports on a host within 10 s raises a `portscan` detection
+  (`model_version: rule:portscan-v1`), explained by the port count.
 - **CV vs test gap** (0.985 vs 0.828 macro-F1): CV runs on class-capped data,
   the test set on the real mix, which punishes precision on rare classes. The
   test numbers are the realistic ones.

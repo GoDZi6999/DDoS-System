@@ -65,6 +65,16 @@ still open. The threat model (STRIDE) is in
 - CI fails on high-severity advisories in production npm dependencies.
 - Secrets come from the environment only; `.env` is git-ignored.
 
+### Real-time engine
+
+- The simulator generates traffic in-process and sends nothing on any network.
+- Live capture is read-only sniffing and is the only mode that needs
+  `CAP_NET_RAW`; the Compose `engine` service runs the simulator without
+  extra capabilities, as a non-root user, on the internal network only.
+- The engine has no database credentials: it reads its risk weights from
+  Redis and writes detections to a capped Redis stream.
+- The model bundle it loads is checksum-verified (see `ml/README.md`).
+
 ### Data pipeline
 
 - At-least-once processing without duplicates (stream entry ids are unique),
