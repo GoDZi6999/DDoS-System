@@ -28,7 +28,7 @@ from app.schemas.config import DetectionConfig
 from app.schemas.detection import Detection
 from app.services.alerts import ingest_detection, summarize
 from app.services.detection_config import get_detection_config
-from app.services.notify import publish
+from app.services.notify import mirror_detection_config, publish
 
 logger = logging.getLogger("app.workers.alert_engine")
 
@@ -69,6 +69,8 @@ class AlertEngine:
         now = time.monotonic()
         if self._config is None or now - self._config[0] > CONFIG_TTL_S:
             self._config = (now, await get_detection_config(session))
+            # Keep Redis in step with the database (e.g. after a Redis restart).
+            await mirror_detection_config(self.redis, self._config[1].model_dump_json())
         return self._config[1]
 
     async def _dead_letter(self, entry_id: str, raw: bytes | None, error: str) -> None:

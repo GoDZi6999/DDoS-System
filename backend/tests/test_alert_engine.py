@@ -5,7 +5,7 @@ import pytest
 from sqlalchemy.exc import OperationalError
 
 from app.models import Alert, NetworkEvent
-from app.services.notify import EVENTS_CHANNEL
+from app.services.notify import CONFIG_KEY, EVENTS_CHANNEL
 from app.workers import alert_engine
 from app.workers.alert_engine import (
     CONSUMER_GROUP,
@@ -63,6 +63,7 @@ def test_detections_become_alerts_and_are_acknowledged(client, redis_client):
 
     assert count_rows(client, Alert) == 1
     assert _pending(redis_client) == 0
+    assert json.loads(redis_client.get(CONFIG_KEY))["alert_min_risk"] == 31  # mirrored
     published = [json.loads(pubsub.get_message(timeout=1)["data"])["type"] for _ in range(2)]
     assert published == ["alert.new", "alert.updated"]
     pubsub.close()
@@ -134,3 +135,15 @@ def test_redelivered_entry_is_not_stored_twice(client, redis_client):
     run(client, handle_twice)
 
     assert count_rows(client, NetworkEvent) == 1
+
+
+def test_published_detection_schema_matches_the_model():
+    """docs/schemas/detection.schema.json is the contract the real-time engine
+    is tested against; regenerate it when the Detection model changes."""
+    import json
+    from pathlib import Path
+
+    from app.schemas.detection import Detection
+
+    path = Path(__file__).resolve().parents[2] / "docs" / "schemas" / "detection.schema.json"
+    assert json.loads(path.read_text()) == Detection.model_json_schema()

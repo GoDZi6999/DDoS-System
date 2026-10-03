@@ -1,8 +1,11 @@
+import json
+
 import pytest
 from sqlalchemy import text
 from sqlalchemy.exc import DBAPIError
 
 from app.services.detection_config import get_detection_config
+from app.services.notify import CONFIG_KEY
 from tests.helpers import audit_actions, ingest, run
 
 DEFAULTS = {
@@ -24,13 +27,14 @@ def test_detection_config_defaults(client, analyst_headers):
     assert response.json() == DEFAULTS
 
 
-def test_admin_updates_detection_config_and_change_is_audited(client, admin_headers):
+def test_admin_updates_detection_config_and_change_is_audited(client, admin_headers, redis_client):
     new = DEFAULTS | {"alert_min_risk": 90}
 
     response = client.put("/api/v1/config/detection", json=new, headers=admin_headers)
 
     assert response.status_code == 200
     assert client.get("/api/v1/config/detection", headers=admin_headers).json() == new
+    assert json.loads(redis_client.get(CONFIG_KEY))["alert_min_risk"] == 90  # for the engine
     entry = audit_actions(client, "config.updated")[0]
     assert entry.actor == "admin-user"
     assert entry.before["alert_min_risk"] == 31

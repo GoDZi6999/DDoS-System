@@ -3,6 +3,7 @@ from fastapi import APIRouter, Request
 from app.api.deps import AdminUser, AnalystUser, SessionDep, actor_for
 from app.schemas.config import DetectionConfig
 from app.services import detection_config
+from app.services.notify import mirror_detection_config
 
 router = APIRouter(prefix="/config", tags=["config"])
 
@@ -16,5 +17,10 @@ async def get_detection_config(_: AnalystUser, session: SessionDep) -> Detection
 async def update_detection_config(
     body: DetectionConfig, admin: AdminUser, request: Request, session: SessionDep
 ) -> DetectionConfig:
-    """Replace the detection settings. The change is audited with before/after values."""
-    return await detection_config.update_detection_config(session, body, actor_for(admin, request))
+    """Replace the detection settings. The change is audited with before/after values
+    and mirrored to Redis, where the real-time engine picks it up within seconds."""
+    config = await detection_config.update_detection_config(
+        session, body, actor_for(admin, request)
+    )
+    await mirror_detection_config(request.app.state.redis, config.model_dump_json())
+    return config

@@ -30,6 +30,10 @@ def main(argv: list[str] | None = None) -> int:
     predict.add_argument("--csv", type=Path, required=True)
     predict.add_argument("--limit", type=int, default=20)
 
+    export = commands.add_parser("export-profiles", help="sample held-out flows for the demo")
+    export.add_argument("--data", type=Path, default=Path("data/raw/cic-ids2017/MachineLearningCVE"))
+    export.add_argument("--out", type=Path, default=Path("data/samples/flow_profiles.csv"))
+
     args = parser.parse_args(argv)
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
 
@@ -37,6 +41,13 @@ def main(argv: list[str] | None = None) -> int:
         from sentinel_ml.train import run
 
         run(args.data, args.models, args.reports, args.cap, args.cv_cap, args.seed)
+        return 0
+
+    if args.command == "export-profiles":
+        from sentinel_ml.profiles import export_profiles
+
+        profiles = export_profiles(args.data, args.out)
+        print(f"Wrote {len(profiles)} flows to {args.out}")
         return 0
 
     from sentinel_ml import features
