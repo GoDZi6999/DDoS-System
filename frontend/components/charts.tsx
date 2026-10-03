@@ -182,6 +182,11 @@ export function ActivityChart({ series }: { series: Timeseries }) {
   );
 }
 
+function share(count: number, total: number): string {
+  const percent = (count / total) * 100;
+  return percent > 0 && percent < 1 ? "<1%" : `${percent.toFixed(0)}%`;
+}
+
 /** Attack flows per type; one colour, the label carries identity. */
 export function DistributionBars({ distribution }: { distribution: Distribution }) {
   const items = distribution.items
@@ -199,7 +204,7 @@ export function DistributionBars({ distribution }: { distribution: Distribution 
           <div className="flex justify-between text-xs">
             <span className="text-ink">{attackName(item.label)}</span>
             <span className="tabular text-ink-2">
-              {formatCount(item.count)} · {((item.count / total) * 100).toFixed(0)}%
+              {formatCount(item.count)} · {share(item.count, total)}
             </span>
           </div>
           <div className="mt-1 h-2 rounded-full bg-ink/5">

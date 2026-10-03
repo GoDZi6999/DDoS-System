@@ -34,7 +34,10 @@ export function Shell({ children }: { children: React.ReactNode }) {
           <Link href="/" className="text-sm font-semibold tracking-wide text-ink">
             <span className="text-accent">Sentinel</span>AI
           </Link>
-          <nav aria-label="Main" className="-mx-1 flex flex-1 gap-1 overflow-x-auto">
+          <nav
+            aria-label="Main"
+            className="order-last -mx-1 flex w-full gap-1 overflow-x-auto md:order-none md:w-auto md:flex-1"
+          >
             {NAV.filter((item) => !me || hasRole(me, item.role)).map((item) => (
               <Link
                 key={item.href}
@@ -50,7 +53,7 @@ export function Shell({ children }: { children: React.ReactNode }) {
               </Link>
             ))}
           </nav>
-          <div className="flex items-center gap-4 text-sm">
+          <div className="ml-auto flex items-center gap-4 text-sm md:ml-0">
             <span className="flex items-center gap-1.5 text-ink-2" role="status">
               <span aria-hidden className={`size-2 rounded-full ${LIVE[status].dot}`} />
               {LIVE[status].label}

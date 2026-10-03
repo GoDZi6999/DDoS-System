@@ -32,8 +32,8 @@ and botnet traffic are the weak spot per flow; see the
 | 3 | Backend: auth/RBAC, database, alert engine + workflow, audit log, WebSocket | ✅ Done |
 | 4 | ML pipeline: CIC-IDS2017, LR / RF / XGBoost, evaluation, SHAP, model bundles | ✅ Done |
 | 5 | Real-time engine: flow builder, PCAP replay, live capture, simulator, port-scan rule, risk engine | ✅ Done |
-| 6 | SOC dashboard on the live API | ⏳ Next |
-| 7 | Notifications and background workers | ⏳ |
+| 6 | SOC dashboard on the live API: overview, live traffic, alerts workflow, audit, settings, users | ✅ Done |
+| 7 | Notifications and background workers | ⏳ Next |
 | 8 | Documentation, performance, optional monitoring | ⏳ |
 
 ## Quick start
@@ -52,13 +52,14 @@ prints a new one (and records the reset in the audit log).
 
 | URL | What |
 |---|---|
-| <http://localhost:3000> | Dashboard (until Phase 6: stack status page) |
+| <http://localhost:3000> | SOC dashboard; sign in as `admin` with the password above |
+| <http://localhost:3000/status> | Public stack status page (no login) |
 | <http://localhost:8000/docs> | API documentation; **Authorize** with `admin` and the password above |
 | <http://localhost:8000/health/ready> | Readiness of PostgreSQL and Redis |
 
 The real-time engine starts with simulated lab traffic (nothing is sent on
-any network). Trigger an attack and watch the alert appear in
-`GET /api/v1/alerts`, or run the whole demo story on a loop:
+any network). Trigger an attack and watch the alert appear on the dashboard
+within seconds, without reloading, or run the whole demo story on a loop:
 
 ```bash
 docker compose exec engine python -m sentinel_engine inject --scenario ddos --duration 20
@@ -67,7 +68,9 @@ ENGINE_SCENARIO=demo docker compose up -d engine     # normal -> DDoS -> port sc
 
 PCAP replay and live capture are described in [`engine/README.md`](engine/README.md).
 
-Check the whole stack with `ADMIN_PASSWORD=… ./scripts/smoke_test.sh`. Stop it
+Check the whole stack with `ADMIN_PASSWORD=… ./scripts/smoke_test.sh`, and the
+dashboard end to end with `cd frontend && ADMIN_PASSWORD=… npm run test:e2e`
+(Playwright: sign in, live DDoS alert, acknowledge → contain → resolve). Stop it
 with `docker compose down` (add `-v` to delete the database volume as well).
 
 > Upgrading from Phase 2: run `docker compose down -v` once. The database role
@@ -85,7 +88,8 @@ To set an admin password, a JWT signing key, database passwords or ports:
 - Frontend (Next.js 16, Tailwind 4): see [`frontend/README.md`](frontend/README.md)
 - CI (GitHub Actions) runs backend lint + tests (against real PostgreSQL and
   Redis), frontend lint + build + a production dependency audit, then builds
-  the Compose stack and runs the authenticated smoke test.
+  the Compose stack and runs the authenticated smoke test and the Playwright
+  end-to-end tests against it.
 
 ## Repository layout
 
@@ -117,6 +121,8 @@ Highlights (full list, tests and known gaps in [`docs/SECURITY.md`](docs/SECURIT
   a full matrix).
 - Append-only audit log enforced by PostgreSQL itself; the API's database
   role cannot alter or delete entries.
+- The dashboard keeps API tokens server-side in httpOnly cookies
+  (backend-for-frontend); browser JavaScript never sees them.
 - Ports bind to `127.0.0.1`; PostgreSQL and Redis sit on an internal network;
   containers run as non-root.
 - The defaults are for local development. Set real secrets in `.env` and put

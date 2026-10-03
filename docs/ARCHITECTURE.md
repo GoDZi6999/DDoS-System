@@ -167,7 +167,7 @@ app/
 lib/api.ts  lib/ws.ts (reconnecting WS client)  lib/auth.ts
 components/  hooks/useLiveAlerts  state: TanStack Query + WS-driven cache updates
 ```
-No mock data in production code: every widget reads from the API/WS. A `NEXT_PUBLIC_DEMO` mode only toggles the *simulator* on the backend. Route guards by role. The API issues bearer tokens; the dashboard will keep them server-side in httpOnly cookies through a Next.js backend-for-frontend layer, so browser JavaScript never holds them.
+No mock data in production code: every widget reads from the API/WS. The demo story is driven by the engine (`ENGINE_SCENARIO=demo`), not by the dashboard. Route guards by role. The API issues bearer tokens; the dashboard keeps them server-side in httpOnly cookies through a Next.js backend-for-frontend layer (`/api/backend` proxy, `/api/live` SSE relay of the WebSocket), so browser JavaScript never holds them.
 
 ## 9. Security architecture
 
@@ -180,7 +180,7 @@ No mock data in production code: every widget reads from the API/WS. A `NEXT_PUB
 ### Threat model (STRIDE summary)
 | Threat | Example | Control |
 |---|---|---|
-| Spoofing | Stolen/forged JWT | Short TTL, signature + issuer/audience checks, refresh rotation with reuse detection, BFF-held httpOnly cookies (Phase 6) |
+| Spoofing | Stolen/forged JWT | Short TTL, signature + issuer/audience checks, refresh rotation with reuse detection, BFF-held httpOnly cookies |
 | Tampering | Analyst edits audit log; poisoned PCAP | Append-only audit table; PCAP parsed in sandboxed worker with limits |
 | Repudiation | "I didn't resolve that alert" | Audit log with actor/IP |
 | Info disclosure | Viewer reads config/users | RBAC per route; field-level filtering |
