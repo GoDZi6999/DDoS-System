@@ -19,6 +19,25 @@ jobs:
     defaults:
       run:
         working-directory: backend
+    # Tests run against real PostgreSQL and Redis (the schema relies on
+    # INET, JSONB, triggers and advisory locks).
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: sentinel
+          POSTGRES_PASSWORD: sentinel
+          POSTGRES_DB: sentinel
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U sentinel"
+          --health-interval 5s --health-timeout 3s --health-retries 10
+      redis:
+        image: redis:7-alpine
+        ports: ["6379:6379"]
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 5s --health-timeout 3s --health-retries 10
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -56,6 +75,11 @@ jobs:
     name: Docker Compose smoke test
     needs: [backend, frontend]
     runs-on: ubuntu-latest
+    env:
+      # Throwaway values for this run only.
+      INITIAL_ADMIN_PASSWORD: ci-smoke-test-passphrase
+      ADMIN_PASSWORD: ci-smoke-test-passphrase
+      JWT_SECRET: ci-only-jwt-secret-0123456789abcdefghijklmnop
     steps:
       - uses: actions/checkout@v4
       - name: Validate compose file

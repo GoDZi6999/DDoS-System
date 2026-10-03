@@ -1,13 +1,24 @@
 # SentinelAI development stack:  docker compose up --build
 #
 # Every variable has a development default, so a fresh clone starts without a
-# .env file. Copy .env.example to .env to override them; change the passwords
+# .env file. Copy .env.example to .env to override them, and set real secrets
 # before exposing the stack beyond your own machine.
+#
+# On first start the migrate service creates the schema and an admin user. If
+# INITIAL_ADMIN_PASSWORD is unset, the generated password is printed once:
+#   docker compose logs migrate
 #
 # Services added in later phases: ml-engine and collector (Phase 5),
 # worker (Phase 7), simulator on an isolated lab network (Phase 5).
 
 name: sentinelai
+
+x-backend: &backend
+  build: ./backend
+  image: sentinelai-backend:latest
+  restart: unless-stopped
+
+x-app-database-url: &app-database-url postgresql+asyncpg://${APP_DB_USER:-sentinel_app}:${APP_DB_PASSWORD:-sentinel_app}@db:5432/${POSTGRES_DB:-sentinel}
 
 services:
   db:
@@ -16,8 +27,12 @@ services:
       POSTGRES_USER: ${POSTGRES_USER:-sentinel}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-sentinel}
       POSTGRES_DB: ${POSTGRES_DB:-sentinel}
+      # Least-privilege role for the API and alert engine (created on first init).
+      APP_DB_USER: ${APP_DB_USER:-sentinel_app}
+      APP_DB_PASSWORD: ${APP_DB_PASSWORD:-sentinel_app}
     volumes:
       - pgdata:/var/lib/postgresql/data
+      - ./infrastructure/db/init:/docker-entrypoint-initdb.d:ro
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U \"$$POSTGRES_USER\" -d \"$$POSTGRES_DB\""]
       interval: 5s
@@ -39,14 +54,30 @@ services:
     networks: [corenet]
     restart: unless-stopped
 
-  backend:
-    build: ./backend
+  # One-shot: apply migrations as the schema owner, then create the first admin.
+  migrate:
+    <<: *backend
+    command: ["sh", "-c", "alembic upgrade head && python -m app.cli bootstrap"]
     environment:
       DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER:-sentinel}:${POSTGRES_PASSWORD:-sentinel}@db:5432/${POSTGRES_DB:-sentinel}
-      REDIS_URL: redis://redis:6379/0
+      INITIAL_ADMIN_USERNAME: ${INITIAL_ADMIN_USERNAME:-admin}
+      INITIAL_ADMIN_PASSWORD: ${INITIAL_ADMIN_PASSWORD:-}
     depends_on:
       db:
         condition: service_healthy
+    networks: [corenet]
+    restart: "no"
+
+  backend:
+    <<: *backend
+    environment:
+      ENVIRONMENT: ${ENVIRONMENT:-development}
+      DATABASE_URL: *app-database-url
+      REDIS_URL: redis://redis:6379/0
+      JWT_SECRET: ${JWT_SECRET:-}
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
       redis:
         condition: service_healthy
     ports:
@@ -62,7 +93,31 @@ services:
       retries: 6
       start_period: 10s
     networks: [frontnet, corenet]
-    restart: unless-stopped
+
+  # Consumes detections from Redis, stores them and raises alerts.
+  alert-engine:
+    <<: *backend
+    command: ["python", "-m", "app.workers.alert_engine"]
+    environment:
+      DATABASE_URL: *app-database-url
+      REDIS_URL: redis://redis:6379/0
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+      redis:
+        condition: service_healthy
+    healthcheck:
+      # The worker touches this file on every loop iteration (at least every 5 s).
+      test:
+        - CMD
+        - python
+        - -c
+        - "import os, sys, time; sys.exit(time.time() - os.path.getmtime('/tmp/alert-engine.heartbeat') > 30)"
+      interval: 10s
+      timeout: 3s
+      retries: 3
+      start_period: 15s
+    networks: [corenet]
 
   frontend:
     build: ./frontend
@@ -85,7 +140,7 @@ services:
 networks:
   # Browser-facing tier: frontend and backend.
   frontnet:
-  # Data tier: no route to the outside world; only the backend joins both.
+  # Data tier: no route to the outside world.
   corenet:
     internal: true
 
