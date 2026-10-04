@@ -120,6 +120,7 @@ export type AuditEntry = {
 
 export type TrafficTick = {
   ts: string;
+  source_id?: string;
   flows_per_s: number;
   packets_per_s: number;
   attacks: number;

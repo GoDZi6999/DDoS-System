@@ -122,7 +122,8 @@ test("an admin adds an email channel and its test message is delivered", async (
       `SentinelAI test notification for channel '${name}'`,
     );
   } else {
-    // Without an SMTP relay the delivery fails with a clear reason.
-    await expect(logRow.getByText(/Sent|Failed/)).toBeVisible({ timeout: 30_000 });
+    // Without an SMTP relay (the default) the delivery fails with a clear reason.
+    await expect(logRow.getByText("Failed", { exact: true })).toBeVisible({ timeout: 30_000 });
+    await expect(logRow.getByText(/SMTP is not configured/)).toBeVisible();
   }
 });

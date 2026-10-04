@@ -12,6 +12,8 @@ simulator behave exactly like live capture.
 
 import logging
 import math
+import os
+import socket
 import time
 from collections.abc import Iterable
 from datetime import UTC, datetime
@@ -59,6 +61,7 @@ class Engine:
         self.portscan_min_ports = portscan_min_ports
         self.heartbeat_file = heartbeat_file
         self.explain_per_target_s = explain_per_target_s
+        self.source_id = f"{socket.gethostname()}:{os.getpid()}"
         self._explain_second = -1
         self._explained: dict[tuple[str, str], int] = {}
         self.table = FlowTable()
@@ -212,6 +215,9 @@ class Engine:
             "traffic.tick",
             {
                 "ts": datetime.fromtimestamp(now, UTC).isoformat(),
+                # Several engines can run at once (e.g. `inject` next to the
+                # main engine); dashboards add up ticks per second by source.
+                "source_id": self.source_id,
                 "flows_per_s": round(self._tick["flows"] / span, 2),
                 "packets_per_s": round(self._tick["packets"] / span, 2),
                 "attacks": self._tick["attacks"],

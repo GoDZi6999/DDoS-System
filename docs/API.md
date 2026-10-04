@@ -197,7 +197,7 @@ ws.onmessage = (msg) => {
   const event = JSON.parse(msg.data);
   // {type: "auth.ok", user: {...}}  then
   // {type: "alert.new" | "alert.updated", data: <alert list item>}
-  // {type: "traffic.tick", data: {ts, flows_per_s, packets_per_s, attacks, attacks_per_s, max_risk, active_flows}}
+  // {type: "traffic.tick", data: {ts, source_id, flows_per_s, packets_per_s, attacks, attacks_per_s, max_risk, active_flows}}
 };
 ws.onclose = (e) => { if (e.code === 4401) { /* refresh the token, reconnect */ } };
 ```
