@@ -73,7 +73,15 @@ still open. The threat model (STRIDE) is in
 ### Infrastructure
 
 - Published ports bind to `127.0.0.1`; PostgreSQL and Redis are not published
-  and sit on an internal Docker network with no internet route.
+  and sit on an internal Docker network with no internet route. The sensor
+  overlay (`docker-compose.sensor.yml`) is the exception: it publishes Redis,
+  on `127.0.0.1` unless `SENSOR_BIND` says otherwise, through a separate network
+  that carries only Redis.
+- Redis requires a password (`REDIS_PASSWORD`). Capture sensors use their own
+  ACL account (`SENSOR_REDIS_PASSWORD`, disabled when unset) that may only
+  `XADD` to `sentinel:flows` and `HSET`/`EXPIRE` keys under `sentinel:sensors:`;
+  it cannot read anything, publish events, touch detections or settings, or run
+  administrative commands.
 - Application containers run as non-root users; images are minimal
   (`python:3.12-slim`, standalone Next.js on `node:24-alpine`).
 - CI fails on high-severity advisories in production npm dependencies.
@@ -88,6 +96,12 @@ still open. The threat model (STRIDE) is in
 - The engine has no database credentials: it reads its risk weights from
   Redis and writes detections to a capped Redis stream.
 - The model bundle it loads is checksum-verified (see `ml/README.md`).
+- Capture sensors send flow statistics only (addresses, ports, counts,
+  timings), never payloads. Every flow entry from a sensor is validated
+  (protocol version, sensor name, IP addresses, port and count ranges, finite
+  timestamps near the engine's clock, exactly the 35 model features, size cap)
+  and dropped if malformed, so a misbehaving sensor cannot crash or poison the
+  engine's input format.
 
 ### Data pipeline
 
@@ -111,4 +125,6 @@ still open. The threat model (STRIDE) is in
 | Strict refresh rotation | Concurrent refreshes are de-duplicated inside one Next.js process; running several dashboard replicas behind a load balancer would reintroduce false theft alarms | Run one dashboard replica, or move the refresh lock to Redis |
 | Access tokens live up to 15 minutes after logout | A stolen access token stays usable until it expires unless the user changes password or is deactivated | Short TTL; version bump for hard revocation |
 | Dev defaults | Default database passwords and an ephemeral JWT key are for local use | Set real values in `.env`; production mode refuses to start without `JWT_SECRET` |
+| Unencrypted sensor link | Flow statistics and the sensor password cross the network in clear text when sensors run on other hosts | Keep `SENSOR_BIND` on `127.0.0.1` for a local sensor; for remote sensors use a VPN, SSH tunnel or a TLS proxy (e.g. stunnel) in front of Redis |
+| Sensors can impersonate each other | Any holder of the sensor password can send flows under any sensor name or overwrite another sensor's status | One shared sensor account is the trade-off for simple setup; per-sensor ACL accounts would close it |
 | Model attacks (evasion, poisoning) | Adversarial traffic can be crafted to look benign | Documented limitation; model bundles are activated by admins only (Phase 4) |

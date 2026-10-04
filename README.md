@@ -8,7 +8,7 @@ SOC-style workflow. It does **not** claim to prevent attacks: mitigation is a
 future, opt-in phase with safeguards.
 
 ```
-Live traffic / PCAP replay -> Flow builder -> Feature extraction -> ML engine (RF / XGBoost)
+Capture sensors / PCAP replay -> Flow builder -> Feature extraction -> ML engine (RF / XGBoost)
   -> SHAP explanation + risk score -> Redis -> FastAPI (REST + WebSocket) -> Next.js SOC dashboard
                                                      |-> PostgreSQL       |-> Email / Slack / webhook
 ```
@@ -68,6 +68,26 @@ ENGINE_SCENARIO=demo docker compose up -d engine     # normal -> DDoS -> port sc
 
 PCAP replay and live capture are described in [`engine/README.md`](engine/README.md).
 
+### Monitor real traffic
+
+To classify your own network's traffic instead of the simulator's, run the stack
+with the sensor overlay and start a capture sensor on each machine to watch
+(Windows, Linux or macOS; containers under Docker Desktop cannot see the host's
+adapters, so capture runs natively and ships flow statistics to the stack):
+
+```bash
+# .env: set REDIS_PASSWORD and SENSOR_REDIS_PASSWORD first (see .env.example)
+docker compose -f docker-compose.yml -f docker-compose.sensor.yml up -d --build --wait
+```
+
+```powershell
+.\scripts\run_sensor.ps1 -Interface "Wi-Fi" -Name my-laptop   # Windows, admin PowerShell
+```
+
+The sensor appears on the dashboard's **Sensors** page and its traffic flows into
+the Overview and Alerts pages. Linux/macOS and multi-host setup:
+[`engine/README.md`](engine/README.md#capture-sensors-real-traffic).
+
 Check the whole stack with `ADMIN_PASSWORD=… ./scripts/smoke_test.sh`, and the
 dashboard end to end with `cd frontend && ADMIN_PASSWORD=… npm run test:e2e`
 (Playwright: sign in, live DDoS alert, acknowledge → contain → resolve). Stop it
@@ -79,7 +99,7 @@ with `docker compose down` (add `-v` to delete the database volume as well).
 ### Configuration
 
 Every setting has a development default, so no `.env` file is needed to start.
-To set an admin password, a JWT signing key, database passwords or ports:
+To set an admin password, a JWT signing key, database or Redis passwords, or ports:
 `cp .env.example .env` and edit it.
 
 ## Development

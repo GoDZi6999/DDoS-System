@@ -1,0 +1,3 @@
+# Capture sensor only (python -m sentinel_engine.sensor): no ML stack needed.
+scapy==2.8.0
+redis==8.1.0

@@ -132,3 +132,28 @@ export type LiveMessage =
   | { type: "auth.ok"; user: User }
   | { type: "alert.new" | "alert.updated"; data: AlertSummary }
   | { type: "traffic.tick"; data: TrafficTick };
+
+export type SensorStatus = "online" | "stale" | "offline";
+
+export type Sensor = {
+  name: string;
+  status: SensorStatus;
+  hostname: string;
+  platform: string;
+  interface: string;
+  filter: string;
+  started_at: string | null;
+  last_seen: string | null;
+  packets: number;
+  packets_per_s: number;
+  flows_sent: number;
+  flows_buffered: number;
+  flows_dropped: number;
+  capture_drops: number;
+  active_flows: number;
+};
+
+export type SensorList = {
+  items: Sensor[];
+  backlog: { pending: number; lag: number | null } | null;
+};

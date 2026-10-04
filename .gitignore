@@ -52,3 +52,4 @@ legacy/logs/
 *.swp
 .DS_Store
 Thumbs.db
+.sensor-venv/

@@ -9,6 +9,7 @@ import type { Role } from "@/lib/types";
 const NAV: { href: string; label: string; role: Role }[] = [
   { href: "/", label: "Overview", role: "viewer" },
   { href: "/alerts", label: "Alerts", role: "viewer" },
+  { href: "/sensors", label: "Sensors", role: "viewer" },
   { href: "/audit", label: "Audit log", role: "admin" },
   { href: "/users", label: "Users", role: "admin" },
   { href: "/settings", label: "Settings", role: "viewer" },

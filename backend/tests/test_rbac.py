@@ -27,6 +27,7 @@ MATRIX = [
     ("GET", "/api/v1/stats/summary", VIEWER, None),
     ("GET", "/api/v1/stats/timeseries", VIEWER, None),
     ("GET", "/api/v1/stats/distribution", VIEWER, None),
+    ("GET", "/api/v1/sensors", VIEWER, None),
     ("GET", "/api/v1/config/detection", ANALYST, None),
     ("PUT", "/api/v1/config/detection", ADMIN, {}),
     ("GET", "/api/v1/users", ADMIN, None),

@@ -1,0 +1,26 @@
+# Real traffic from capture sensors instead of simulated lab traffic:
+#
+#   docker compose -f docker-compose.yml -f docker-compose.sensor.yml up -d --wait
+#
+# Redis is published for sensors on SENSOR_BIND:SENSOR_PORT (default
+# 127.0.0.1:6379, enough for a sensor on this machine), and the engine
+# classifies the flows they ship. Sensors log in as the restricted `sensor`
+# account, which can only append flows and update sensor status, so set
+# SENSOR_REDIS_PASSWORD (and REDIS_PASSWORD) in .env first. Before binding
+# beyond localhost, put the port behind a firewall, VPN or TLS tunnel: Redis
+# traffic itself is not encrypted. Running a sensor: engine/README.md.
+
+services:
+  redis:
+    environment:
+      SENSOR_REDIS_PASSWORD: ${SENSOR_REDIS_PASSWORD:?set SENSOR_REDIS_PASSWORD in .env (see .env.example)}
+    ports:
+      - "${SENSOR_BIND:-127.0.0.1}:${SENSOR_PORT:-6379}:6379"
+    # corenet is internal and cannot publish ports; sensornet carries only Redis.
+    networks: [corenet, sensornet]
+
+  engine:
+    command: ["python", "-m", "sentinel_engine", "run", "--source", "sensor"]
+
+networks:
+  sensornet: {}

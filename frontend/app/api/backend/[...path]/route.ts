@@ -13,6 +13,7 @@ const ALLOWED = [
   /^alerts(\/\d+(\/(ack|status|notes|assignee|events))?)?$/,
   /^events(\/\d+)?$/,
   /^stats\/(summary|timeseries|distribution)$/,
+  /^sensors$/,
   /^config\/detection$/,
   /^audit$/,
   /^users(\/\d+)?$/,

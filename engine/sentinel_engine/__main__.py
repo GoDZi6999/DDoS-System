@@ -3,7 +3,10 @@
     python -m sentinel_engine run --source simulate --scenario demo --loop
     python -m sentinel_engine run --source pcap --pcap capture.pcap --speed 2
     python -m sentinel_engine run --source live --interface eth0     (needs CAP_NET_RAW)
+    python -m sentinel_engine run --source sensor                    (flows from sensors)
     python -m sentinel_engine inject --scenario ddos --duration 20   (attack burst only)
+
+Capture sensors on other hosts: python -m sentinel_engine.sensor --help
 
 Environment: REDIS_URL, MODEL_BUNDLE, FLOW_PROFILES.
 """
@@ -26,7 +29,7 @@ def main(argv: list[str] | None = None) -> int:
     commands = parser.add_subparsers(dest="command", required=True)
 
     run = commands.add_parser("run", help="run the real-time engine")
-    run.add_argument("--source", choices=["simulate", "pcap", "live"], default="simulate")
+    run.add_argument("--source", choices=["simulate", "pcap", "live", "sensor"], default="simulate")
     run.add_argument("--scenario", choices=sorted(SCENARIOS), default="normal")
     run.add_argument("--loop", action="store_true", help="repeat the scenario forever")
     run.add_argument("--duration", type=float, help="stop after N seconds (simulate)")
@@ -72,6 +75,11 @@ def main(argv: list[str] | None = None) -> int:
             parser.error("--pcap is required with --source pcap")
         source = pcap_source(args.pcap, speed=args.speed, retime=not args.no_retime)
         kind = "pcap"
+    elif args.source == "sensor":
+        from sentinel_engine.sources import sensor_source
+
+        source = sensor_source(publisher.redis)
+        kind = "live"
     else:
         from sentinel_engine.sources import live_source
 

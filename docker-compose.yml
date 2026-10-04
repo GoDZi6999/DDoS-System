@@ -10,7 +10,10 @@
 #
 # The engine runs simulated lab traffic by default (nothing is sent on any
 # network). ENGINE_SCENARIO=demo cycles through attacks; see engine/README.md
-# for PCAP replay and live capture. Services added later: worker (Phase 7).
+# for PCAP replay and live capture. To classify real traffic captured by
+# sensors on other hosts (or on this one, next to Docker Desktop):
+#   docker compose -f docker-compose.yml -f docker-compose.sensor.yml up -d
+# Services added later: worker (Phase 7).
 
 name: sentinelai
 
@@ -18,6 +21,8 @@ x-backend: &backend
   build: ./backend
   image: sentinelai-backend:latest
   restart: unless-stopped
+
+x-redis-url: &redis-url redis://:${REDIS_PASSWORD:-sentinel_redis}@redis:6379/0
 
 x-app-database-url: &app-database-url postgresql+asyncpg://${APP_DB_USER:-sentinel_app}:${APP_DB_PASSWORD:-sentinel_app}@db:5432/${POSTGRES_DB:-sentinel}
 
@@ -42,9 +47,27 @@ services:
     networks: [corenet]
     restart: unless-stopped
 
+  # Password-protected. The restricted `sensor` account (append flows, update
+  # its own status, nothing else) is enabled when SENSOR_REDIS_PASSWORD is set;
+  # docker-compose.sensor.yml publishes Redis to capture sensors.
   redis:
     image: redis:7-alpine
-    command: ["redis-server", "--appendonly", "yes"]
+    environment:
+      REDIS_PASSWORD: ${REDIS_PASSWORD:-sentinel_redis}
+      SENSOR_REDIS_PASSWORD: ${SENSOR_REDIS_PASSWORD:-}
+      REDISCLI_AUTH: ${REDIS_PASSWORD:-sentinel_redis}
+    command:
+      - sh
+      - -c
+      - |
+        if [ -n "$$SENSOR_REDIS_PASSWORD" ]; then
+          set -- --user sensor on ">$$SENSOR_REDIS_PASSWORD" resetkeys \
+            "~sentinel:flows" "~sentinel:sensors:*" resetchannels \
+            -@all +xadd +hset +expire +ping +hello "+client|setinfo"
+        else
+          set -- --user sensor off
+        fi
+        exec redis-server --appendonly yes --requirepass "$$REDIS_PASSWORD" "$$@"
     volumes:
       - redisdata:/data
     healthcheck:
@@ -74,7 +97,7 @@ services:
     environment:
       ENVIRONMENT: ${ENVIRONMENT:-development}
       DATABASE_URL: *app-database-url
-      REDIS_URL: redis://redis:6379/0
+      REDIS_URL: *redis-url
       JWT_SECRET: ${JWT_SECRET:-}
       # Trust X-Forwarded-For only from the dashboard server (its fixed
       # address below), so per-IP login throttling and audit entries see the
@@ -105,7 +128,7 @@ services:
     command: ["python", "-m", "app.workers.alert_engine"]
     environment:
       DATABASE_URL: *app-database-url
-      REDIS_URL: redis://redis:6379/0
+      REDIS_URL: *redis-url
     depends_on:
       migrate:
         condition: service_completed_successfully
@@ -131,7 +154,7 @@ services:
       dockerfile: engine/Dockerfile
     image: sentinelai-engine:latest
     environment:
-      REDIS_URL: redis://redis:6379/0
+      REDIS_URL: *redis-url
       ENGINE_SCENARIO: ${ENGINE_SCENARIO:-normal}
     depends_on:
       redis:

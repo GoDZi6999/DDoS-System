@@ -127,6 +127,7 @@ Example alert (list item):
 | `GET /stats/timeseries?window=24h&bucket=15m` | `bucket`: `1m`, `5m`, `15m`, `1h`, `6h`; empty buckets are filled; at most 1440 points. |
 | `GET /stats/distribution?window=24h` | Flow counts per predicted label, `benign` included. |
 | `GET /config/detection` / `PUT` | `{"alert_min_risk": 31, "aggregation_window_minutes": 15, "risk_weights": {"ml_confidence": 0.4, "traffic_anomaly": 0.25, "attack_severity": 0.25, "source_reputation": 0.1}}`; weights must sum to 1. Changes are audited with before/after values. |
+| `GET /sensors` | Viewer. Capture sensors with `status` (`online`: reported within 15 s, `stale`: within 60 s, `offline`), host, interface, packet rate, flows sent/buffered/dropped and capture drops; plus `backlog` (`pending`, `lag`) of the engine on the sensor flow stream, `null` until the engine reads it. |
 | `GET /audit` | Newest first. Filters: `actor`, `action`, `entity_type`, `entity_id`, `since`, `until`. Read-only by design. |
 
 Audited actions: `auth.login`, `auth.login_failed`, `auth.locked`,
