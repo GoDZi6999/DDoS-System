@@ -22,8 +22,10 @@ type Buckets = Map<number, Map<string, TrafficTick>>;
 /** Several engines can publish ticks (e.g. `inject` next to the main engine):
  * keep the latest tick per engine per second and add them up. */
 function aggregate(buckets: Buckets): TrafficTick[] {
-  return [...buckets.entries()]
-    .sort(([a], [b]) => a - b)
+  const seconds = [...buckets.entries()].sort(([a], [b]) => a - b);
+  // The newest second may still be missing other engines' ticks; show it only
+  // once a later second has started (unless it is all there is).
+  return (seconds.length > 1 ? seconds.slice(0, -1) : seconds)
     .map(([second, sources]) => {
       const ticks = [...sources.values()];
       const sum = (key: keyof TrafficTick) => ticks.reduce((t, x) => t + Number(x[key] ?? 0), 0);

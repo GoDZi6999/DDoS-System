@@ -16,7 +16,7 @@ The current root-level Flask app trains on NSL-KDD (`data_preprocessing.py`, `mo
 | In-process queue, Flask-SocketIO, open dashboard, `SECRET_KEY` default | No auth, no persistence, not horizontally separable | FastAPI + Redis + PostgreSQL + JWT/RBAC |
 | NSL-KDD (1999 traffic) | Weak real-world relevance | CIC-IDS2017 / CIC-DDoS2019 primary; UNSW-NB15 for cross-dataset generalisation check |
 
-The prototype is retained under `legacy/` for reference and removed once Phase 4 reaches parity.
+The prototype is retained under `legacy/` for reference only; SentinelAI superseded it in Phase 4 and nothing uses it.
 
 ## 1. System architecture
 
@@ -154,7 +154,7 @@ Indexes: `alerts(status, last_seen_at)`, `alerts(attack_type, destination_ip, st
 | Detection | `GET/PUT /config/detection` (threshold, window, risk weights); planned: `POST /detect`, `GET /models`, `POST /models/{id}/activate` (Phase 4/5) | Analyst read / Admin write |
 | Ingest control | Engine CLI for now (`python -m sentinel_engine run|inject`, see `engine/README.md`); API control endpoints deferred | Admin |
 | Audit | `GET /audit` | Admin |
-| Ops | `GET /health`, `GET /health/ready`; planned: `GET /metrics` (Phase 8) | internal |
+| Ops | `GET /health`, `GET /health/ready`, `GET /metrics` (Prometheus) | internal |
 | Realtime | `WS /api/v1/ws`, authenticated by its first message (no token in the URL) — `alert.new`, `alert.updated`; planned: `stats.tick`, `traffic.tick` (Phase 5) | Viewer |
 
 Conventions: JSON, ISO-8601 timestamps (a timezone is required on input), limit/offset pagination returning `{items, total, limit, offset}`, errors as FastAPI's `{"detail": ...}`. Full reference: [`API.md`](API.md).
@@ -212,17 +212,17 @@ Networks: `frontnet` (browser-facing: frontend, backend), `corenet` (internal, n
 ## 11. Folder structure
 
 ```
-backend/        app/{api,core,models,schemas,services,ws}, alembic/, tests/
-frontend/       app/, components/, lib/, e2e/ (Playwright)
-ml/             sentinel_features/ (shared), training/, evaluation/, inference/, notebooks/
-engine/         sentinel_engine: sources (live, pcap, simulator), flows, window rule, risk, pipeline
-data/           README (dataset download/cite), samples/ (tiny PCAPs)   # raw data gitignored
-models/         <name>/<version>/…                                      # large binaries gitignored; demo model tracked via LFS or script
+backend/        app/{api,core,db,models,schemas,services,workers}, alembic/, tests/
+frontend/       app/ (routes, BFF route handlers), components/, lib/, e2e/ (Playwright), proxy.ts
+ml/             sentinel_ml: features, data, models, train, evaluate, explain, bundle, inference; reports/
+engine/         sentinel_engine: packets, flows, window rule, risk, pipeline, simulator, sources, bench
+data/           README (dataset download/cite), samples/flow_profiles.csv   # raw data gitignored
+models/         sentinel-flow/<version>/ (bundle + checksums, committed)
 infrastructure/ db/init, prometheus/, grafana/   # each service's Dockerfile lives in its own folder
-tests/          integration/, e2e/, ml-regression/
-docs/           ARCHITECTURE.md, API.md, ML_METHODOLOGY.md, THREAT_MODEL.md, TESTING.md, DEMO.md
-scripts/        train.sh, seed.py, replay_demo.sh, fetch_datasets.sh
-legacy/         current NSL-KDD prototype (temporary)
+tests/          README mapping the per-component test suites
+docs/           ARCHITECTURE, API, ML_METHODOLOGY, SECURITY, PERFORMANCE, TESTING, DEMO, schemas/, images/
+scripts/        smoke_test.sh, benchmark_stack.py
+legacy/         NSL-KDD prototype (superseded, reference only)
 .env.example  README.md  docker-compose.yml  .gitignore
 ```
 
@@ -237,7 +237,7 @@ legacy/         current NSL-KDD prototype (temporary)
 | 5 | Real-time: collector → flow builder → ML → risk → Redis → WS; PCAP replay; simulator | Replay demo raises CRITICAL alert end-to-end; p95 latency measured |
 | 6 | Dashboard on real API/WS, detail page with SHAP, workflow actions | Playwright E2E: login → live alert → ack → resolve |
 | 7 | Notifications (email/Slack/webhook) via transactional outbox + notifier worker, retention | Delivery logged + retried; email verified end to end in CI |
-| 8 | Docs, screenshots, performance, limitations; optional Prometheus/Grafana | Fresh-clone `docker compose up` demo |
+| 8 | Docs, screenshots, performance, limitations; optional Prometheus/Grafana | Fresh-clone `docker compose up` demo (verified: smoke test and Playwright pass on a default-config clone) |
 | 9 (optional) | Policy engine + **dry-run** mitigation with allow-lists, rate caps, human approval | Only after validated false-positive rate |
 
 ## 13. Key risks & decisions
