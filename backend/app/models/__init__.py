@@ -3,6 +3,7 @@
 from app.models.alert import Alert, AlertNote, alert_events
 from app.models.audit import AuditLog
 from app.models.event import NetworkEvent, Prediction
+from app.models.notification import NotificationChannel, NotificationDelivery
 from app.models.setting import Setting
 from app.models.user import RefreshToken, User
 
@@ -11,6 +12,8 @@ __all__ = [
     "AlertNote",
     "AuditLog",
     "NetworkEvent",
+    "NotificationChannel",
+    "NotificationDelivery",
     "Prediction",
     "RefreshToken",
     "Setting",

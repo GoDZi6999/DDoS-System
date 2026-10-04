@@ -24,6 +24,7 @@ from app.schemas.detection import BENIGN_LABEL, Detection
 from app.schemas.user import UserRef
 from app.services.audit import SYSTEM_ACTOR, Actor, record_audit
 from app.services.errors import ConflictError, NotFoundError, UnprocessableError
+from app.services.notifications import enqueue_for_alert
 from app.services.playbook import describe, recommended_action
 
 S = AlertStatus
@@ -423,4 +424,8 @@ async def ingest_detection(
         )
 
     await session.execute(insert(alert_events).values(alert_id=alert.id, event_id=event.id))
+    if created or escalated:
+        # Same transaction as the alert change: the delivery exists if and only
+        # if the change commits (transactional outbox).
+        await enqueue_for_alert(session, alert, created=created)
     return IngestResult(event_id=event.id, alert=alert, created=created, escalated=escalated)
