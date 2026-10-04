@@ -12,7 +12,7 @@ from urllib.parse import urlsplit, urlunsplit
 
 from pydantic import ValidationError
 from sqlalchemy import func, select
-from sqlalchemy.dialects.postgresql import insert
+from sqlalchemy.dialects.postgresql import distinct_on, insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import get_settings
@@ -215,7 +215,7 @@ async def _last_deliveries(
     rows = await session.scalars(
         select(NotificationDelivery)
         .where(NotificationDelivery.channel_id.in_(channel_ids))
-        .distinct(NotificationDelivery.channel_id)
+        .ext(distinct_on(NotificationDelivery.channel_id))
         .order_by(NotificationDelivery.channel_id, NotificationDelivery.created_at.desc())
     )
     return {row.channel_id: row for row in rows}
