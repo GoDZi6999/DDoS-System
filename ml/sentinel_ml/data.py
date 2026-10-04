@@ -142,14 +142,20 @@ def temporal_split(dataset: Dataset, n_folds: int = 5) -> Split:
 
 
 def cap_per_class(
-    X: pd.DataFrame, y: pd.Series, cap: int, seed: int, folds: np.ndarray | None = None
+    X: pd.DataFrame,
+    y: pd.Series,
+    cap: int,
+    seed: int,
+    folds: np.ndarray | None = None,
+    uncapped: tuple[str, ...] = (),
 ) -> tuple[pd.DataFrame, pd.Series, np.ndarray | None]:
-    """Random sample of at most `cap` rows per class (keeps training time bounded)."""
+    """Random sample of at most `cap` rows per class (keeps training time
+    bounded); classes in `uncapped` are kept in full."""
     rng = np.random.default_rng(seed)
     chosen = []
     for label in y.unique():
         index = np.flatnonzero((y == label).to_numpy())
-        if len(index) > cap:
+        if label not in uncapped and len(index) > cap:
             index = rng.choice(index, size=cap, replace=False)
         chosen.append(index)
     order = np.sort(np.concatenate(chosen))

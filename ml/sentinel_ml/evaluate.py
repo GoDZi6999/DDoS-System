@@ -19,6 +19,8 @@ from sklearn.metrics import (
 )
 from sklearn.pipeline import Pipeline
 
+from sentinel_ml.decision import decide, expected_calibration_error
+
 BENIGN_INDEX = 0  # data.CLASSES[0] == "benign"
 
 
@@ -34,12 +36,20 @@ def _latency(pipeline: Pipeline, X: pd.DataFrame, repeats: int = 50) -> float:
     return float(np.median(timings) * 1000)
 
 
-def evaluate(pipeline: Pipeline, X: pd.DataFrame, y: np.ndarray, classes: list[str]) -> dict:
+def evaluate(
+    pipeline: Pipeline,
+    X: pd.DataFrame,
+    y: np.ndarray,
+    classes: list[str],
+    weights: np.ndarray | None = None,
+) -> dict:
+    """Metrics for labels decided with `weights` (see decision.py); ROC/PR-AUC
+    use the raw probabilities and are unaffected by them."""
     labels = list(range(len(classes)))
     start = time.perf_counter()
     proba = pipeline.predict_proba(X)
     batch_seconds = time.perf_counter() - start
-    pred = proba.argmax(axis=1)
+    pred = decide(proba, weights)
 
     precision, recall, f1, support = precision_recall_fscore_support(
         y, pred, labels=labels, zero_division=0
@@ -74,6 +84,7 @@ def evaluate(pipeline: Pipeline, X: pd.DataFrame, y: np.ndarray, classes: list[s
             for i, cls in enumerate(classes)
         },
         "confusion_matrix": confusion_matrix(y, pred, labels=labels).tolist(),
+        "calibration_error": expected_calibration_error(proba, y, weights),
         "batch_us_per_flow": batch_seconds / max(len(X), 1) * 1e6,
         "single_flow_ms": _latency(pipeline, X),
     }

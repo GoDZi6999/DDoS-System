@@ -12,6 +12,7 @@ import numpy as np
 import pandas as pd
 
 from sentinel_ml.bundle import Bundle, load_bundle
+from sentinel_ml.decision import decide
 from sentinel_ml.explain import Explainer
 
 BENIGN = "benign"
@@ -39,6 +40,10 @@ class Predictor:
         self.bundle = bundle
         self.top_k = top_k
         self._explainer: Explainer | None = None
+        # Per-class decision weights tuned at training time (decision.py);
+        # bundles without them decide by plain argmax.
+        stored = bundle.metadata.get("decision_weights", {})
+        self.weights = np.array([float(stored.get(c, 1.0)) for c in bundle.classes])
 
     @classmethod
     def from_bundle(cls, path: str | Path, top_k: int = 5) -> "Predictor":
@@ -53,7 +58,7 @@ class Predictor:
     def predict(self, features: pd.DataFrame, explain: str = "attacks") -> list[Prediction]:
         """explain: "attacks" (default, cheapest useful), "all" or "none"."""
         proba = self.bundle.pipeline.predict_proba(features)
-        best = proba.argmax(axis=1)
+        best = decide(proba, self.weights)
         classes = self.bundle.classes
         predictions = [
             Prediction(

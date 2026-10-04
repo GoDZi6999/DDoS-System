@@ -96,11 +96,31 @@ CANDIDATES: dict[str, Callable[[int], Pipeline]] = {
 }
 
 
-def fit(pipeline: Pipeline, X: pd.DataFrame, y: np.ndarray) -> Pipeline:
-    """Fit with class balancing. XGBoost has no class_weight, so it gets
-    balanced sample weights; the other models balance internally."""
+class AblationPreprocessor(FlowPreprocessor):
+    """FlowPreprocessor without some features; used for ablation studies only
+    (bundled models always use the full feature set)."""
+
+    def __init__(self, drop: tuple[str, ...] = ()) -> None:
+        self.drop = drop
+
+    def transform(self, X: pd.DataFrame) -> np.ndarray:
+        columns = [f for f in FEATURE_NAMES if f not in self.drop]
+        values = X[columns].to_numpy(dtype=np.float64)
+        return np.sign(values) * np.log1p(np.abs(values))
+
+
+def without_features(pipeline: Pipeline, drop: tuple[str, ...]) -> Pipeline:
+    return Pipeline([("features", AblationPreprocessor(drop)), *pipeline.steps[1:]])
+
+
+def fit(pipeline: Pipeline, X: pd.DataFrame, y: np.ndarray, balanced: bool = False) -> Pipeline:
+    """Fit a candidate. XGBoost learns the class mix it is given (benign is
+    kept in full, so probabilities stay close to real base rates; rare
+    classes are handled by the tuned decision weights, see decision.py).
+    balanced=True gives it balanced sample weights instead. The linear and
+    forest baselines balance internally (class_weight)."""
     params = {}
-    if isinstance(pipeline[-1], XGBClassifier):
+    if balanced and isinstance(pipeline[-1], XGBClassifier):
         params["model__sample_weight"] = compute_sample_weight("balanced", y)
     return pipeline.fit(X, y, **params)
 
