@@ -1,6 +1,6 @@
 # Security controls
 
-What SentinelAI implements today (through Phase 6), how it is verified, and what is
+What SentinelAI implements today (through Phase 7), how it is verified, and what is
 still open. The threat model (STRIDE) is in
 [`ARCHITECTURE.md`](ARCHITECTURE.md) §9.
 
@@ -70,6 +70,18 @@ still open. The threat model (STRIDE) is in
 | Request size | Proxied bodies are capped at 64 KB | route handler |
 | Client IP | The API trusts `X-Forwarded-For` only from the dashboard container's fixed address (`FORWARDED_ALLOW_IPS`), so login throttling and audit entries see the browser's address | manual check of `audit_logs.ip` |
 
+### Notifications
+
+| Control | Detail | Verified by |
+|---|---|---|
+| Admin-only configuration | Channel management and the delivery log require the admin role; every change and test is audited, with secrets masked in the audit entry | `test_rbac.py`, `test_channel_secrets_are_masked_and_changes_audited` |
+| Secrets never returned | Slack webhook paths, webhook query strings and signing secrets are masked in every API response; the worker logs delivery ids and channel names, never URLs | same |
+| SSRF guard | Webhook/Slack targets must be `https` and resolve only to public addresses (loopback, private, link-local such as cloud metadata `169.254.169.254`, and other non-global ranges are refused); redirects are not followed | `test_private_or_plain_http_targets_are_refused` |
+| Signed webhooks | Optional HMAC-SHA256 over timestamp and body, so receivers can authenticate SentinelAI and reject replays | `test_webhook_delivery_is_signed` |
+| No notification storms | One message per channel, alert and severity band, plus a per-channel hourly cap (excess recorded as `suppressed`) | `test_escalation_notifies_once_per_new_severity_band`, `test_channel_rate_limit_suppresses_excess_deliveries` |
+| Network placement | Only the notifier (and the optional mail catcher) sits on `egressnet`; the database, Redis, API workers and engine have no outbound route | `docker-compose.yml` |
+| Retention | Old flows are purged automatically; alert evidence, alerts and the append-only audit log are kept | `test_retention_keeps_evidence_and_recent_flows` |
+
 ### Infrastructure
 
 - Published ports bind to `127.0.0.1`; PostgreSQL and Redis are not published
@@ -111,4 +123,7 @@ still open. The threat model (STRIDE) is in
 | Strict refresh rotation | Concurrent refreshes are de-duplicated inside one Next.js process; running several dashboard replicas behind a load balancer would reintroduce false theft alarms | Run one dashboard replica, or move the refresh lock to Redis |
 | Access tokens live up to 15 minutes after logout | A stolen access token stays usable until it expires unless the user changes password or is deactivated | Short TTL; version bump for hard revocation |
 | Dev defaults | Default database passwords and an ephemeral JWT key are for local use | Set real values in `.env`; production mode refuses to start without `JWT_SECRET` |
+| Channel secrets stored in clear in PostgreSQL | Anyone with database access can read Slack webhook URLs and webhook signing secrets | Restrict database access; encrypting `notification_channels.config` with a key from the environment is a candidate improvement |
+| DNS rebinding | The SSRF guard resolves the host before sending, and the HTTP client resolves it again; a hostile DNS server could answer differently the second time | Admin-only configuration limits who can set targets; pinning the connection to the checked address would close it |
+| SMTP relay is trusted | `SMTP_*` settings come from the operator's environment and are not subject to the private-address check (relays usually are internal) | Use STARTTLS/TLS (`SMTP_SECURITY`) with a real relay |
 | Model attacks (evasion, poisoning) | Adversarial traffic can be crafted to look benign | Documented limitation; model bundles are activated by admins only (Phase 4) |

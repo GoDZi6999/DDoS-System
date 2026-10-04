@@ -59,7 +59,7 @@ Design principles:
 | `engine` (risk) | Combine signals into 0–100 score; baseline frozen during attacks | Pure Python, weights from the settings API via Redis |
 | `alert_service` | Dedupe/aggregate detections into alerts; state machine; notifications | FastAPI service module + Redis |
 | `api` | REST, WebSocket, JWT, RBAC, audit | FastAPI, SQLAlchemy 2, Alembic |
-| `worker` | Notifications, retention, statistics rollups, retraining jobs | Celery + Redis |
+| `notifier` | Alert notifications (email, Slack, webhook) from a transactional outbox; data retention | asyncio worker + PostgreSQL (`SKIP LOCKED`) |
 | `frontend` | SOC dashboard | Next.js, Tailwind, Recharts |
 | `engine` (simulator) | Benign + attack traffic for demos, in-process (sends nothing); attack statistics from held-out CIC-IDS2017 flows | Python |
 
@@ -106,7 +106,7 @@ NEW → INVESTIGATING → CONTAINED → RESOLVED     (+ FALSE_POSITIVE from any 
 ```
 - Allowed transitions enforced server-side; each transition requires a role (Analyst+) and writes an audit entry plus an optional note.
 - "Acknowledge" = NEW→INVESTIGATING with `acknowledged_by/at`.
-- Notifications: dashboard (WebSocket), email (SMTP), Slack/Teams webhook. Rules: min severity per channel, rate-limited per alert. Delivery attempts logged.
+- Notifications (Phase 7): dashboard (WebSocket) plus admin-configured channels (email via SMTP, Slack incoming webhook, generic HMAC-signed webhook). The alert engine writes a `notification_deliveries` row in the **same transaction** that creates or escalates an alert (transactional outbox), so a notification exists exactly when the alert change commits. Each channel has a minimum severity, hears about an alert **once per severity band** (a flood updating one alert sends at most four messages), and has a per-hour cap beyond which deliveries are recorded as `suppressed`. The `notifier` worker sends deliveries with `SELECT … FOR UPDATE SKIP LOCKED` (safe with several replicas), retries transient failures with backoff (30 s, 2 min, 10 min, 30 min; 5 attempts) and records every outcome; 4xx answers and private-address targets fail permanently.
 - "Recommended action" is text derived from class + severity (playbook table); **advisory only**.
 
 ## 6. Database schema (PostgreSQL)
@@ -132,10 +132,15 @@ alert_notes(id, alert_id FK, author_id FK, body, created_at)
 audit_logs(id, ts, actor_id FK, actor, action, entity_type, entity_id,
            before JSONB, after JSONB, ip INET, user_agent)
 settings(key, value JSONB, updated_by_id FK, updated_at)   -- detection thresholds, risk weights
+notification_channels(id, name UNIQUE, kind, enabled, min_severity, max_per_hour,
+       config JSONB, created_by_id FK, created_at, updated_at)       -- Phase 7 (migration 0002)
+notification_deliveries(id, channel_id FK, alert_id FK, event, dedupe_key, status,
+       attempts, next_attempt_at, last_error, payload JSONB, created_at, sent_at)
+       UNIQUE (channel_id, dedupe_key)                               -- one per alert severity band
 ```
 Planned: `models` (Phase 4 registry; `predictions.model_version` then references it) and `attack_statistics` (Phase 7 rollups, only if stats on the raw tables get slow). Application logs go to container stdout rather than a `system_logs` table.
 
-Indexes: `alerts(status, last_seen_at)`, `alerts(attack_type, destination_ip, status)` for correlation, `network_events(ts)`, `network_events(dst_ip, ts)`, `predictions(label)`, `audit_logs(ts)`, `audit_logs(entity_type, entity_id)`. Day partitioning and retention for `network_events`/`predictions` are planned for Phase 7. `audit_logs` is append-only: a trigger rejects UPDATE, DELETE and TRUNCATE, and the API connects as a non-owner role that cannot disable it.
+Indexes: `alerts(status, last_seen_at)`, `alerts(attack_type, destination_ip, status)` for correlation, `network_events(ts)`, `network_events(dst_ip, ts)`, `predictions(label)`, `audit_logs(ts)`, `audit_logs(entity_type, entity_id)`. Retention (Phase 7, run by the notifier every 6 h and by `python -m app.cli purge`): flows older than `EVENT_RETENTION_DAYS` (14) are deleted unless they are evidence for an alert that is open or was closed within `EVIDENCE_RETENTION_DAYS` (90); finished deliveries are kept `DELIVERY_RETENTION_DAYS` (30); alerts, notes and the audit log are never purged. Day partitioning would replace batched deletes if volumes require it. `audit_logs` is append-only: a trigger rejects UPDATE, DELETE and TRUNCATE, and the API connects as a non-owner role that cannot disable it.
 
 ## 7. API specification (FastAPI, `/api/v1`, OpenAPI at `/docs`)
 
@@ -192,17 +197,17 @@ No mock data in production code: every widget reads from the API/WS. The demo st
 
 ```
 docker compose up
-  db         postgres:16          volume pgdata, healthcheck
-  redis      redis:7              streams + celery broker
-  backend    FastAPI (uvicorn)    depends_on db, redis; runs alembic upgrade on start
-  ml-engine  Python worker        mounts models/ read-only; consumes `flows`
-  collector  Scapy                cap_add NET_RAW; profiles: live | replay
-  worker     Celery               notifications, rollups
-  simulator  Scapy/sockets        profile: demo; isolated network `labnet`
-  frontend   Next.js (standalone)
-  (optional profile) prometheus + grafana
+  db            postgres:16          volume pgdata; least-privilege app role created on init
+  redis         redis:7              detection stream, pub/sub, detection-config mirror
+  migrate       backend image        one-shot: alembic upgrade + first admin (schema owner)
+  backend       FastAPI (uvicorn)    REST + WebSocket; trusts X-Forwarded-For only from frontend
+  alert-engine  backend image        detections -> events, alerts, notification outbox
+  notifier      backend image        sends notifications (retries), applies retention
+  engine        sentinel_engine      simulator by default; PCAP replay / live capture options
+  frontend      Next.js (standalone) dashboard + backend-for-frontend; fixed IP 172.28.0.10
+  mailpit       (profile "mail")     local SMTP catcher for testing email notifications
 ```
-Networks: `frontnet` (frontend↔backend), `corenet` (backend↔db↔redis↔ml), `labnet` (simulator↔collector, internal: true, no egress). A seed step creates default admin from env vars and loads a bundled demo model + small sample PCAP so a fresh clone demos without downloading large datasets.
+Networks: `frontnet` (browser-facing: frontend, backend), `corenet` (internal, no egress: db, redis, workers, engine), `egressnet` (notifier and mail catcher, for SMTP/webhook traffic). The migrate step creates the first admin from env vars, and the trained model bundle ships in the repo, so a fresh clone demos without downloading datasets. The original Celery plan was dropped: the outbox in PostgreSQL gives durable queuing of exactly one delivery per (channel, alert band) without another broker, and matches the alert engine's asyncio worker pattern. Sending is at-least-once: a crash between a successful send and its commit can repeat one message.
 
 ## 11. Folder structure
 
@@ -231,7 +236,7 @@ legacy/         current NSL-KDD prototype (temporary)
 | 4 | ML: dataset prep, `sentinel_features`, 3 models, CV, metrics report, SHAP, bundle, inference service | Metrics report committed; offline/online feature parity test passes |
 | 5 | Real-time: collector → flow builder → ML → risk → Redis → WS; PCAP replay; simulator | Replay demo raises CRITICAL alert end-to-end; p95 latency measured |
 | 6 | Dashboard on real API/WS, detail page with SHAP, workflow actions | Playwright E2E: login → live alert → ack → resolve |
-| 7 | Notifications (email/Slack/webhook), Celery rollups, retention | Delivery logged + retried |
+| 7 | Notifications (email/Slack/webhook) via transactional outbox + notifier worker, retention | Delivery logged + retried; email verified end to end in CI |
 | 8 | Docs, screenshots, performance, limitations; optional Prometheus/Grafana | Fresh-clone `docker compose up` demo |
 | 9 (optional) | Policy engine + **dry-run** mitigation with allow-lists, rate caps, human approval | Only after validated false-positive rate |
 
@@ -240,7 +245,7 @@ legacy/         current NSL-KDD prototype (temporary)
 1. **Dataset size/licensing:** CIC datasets are tens of GB and must be downloaded by the user; the repo ships only a small sample + a pretrained demo model. *Decision:* train on a documented subset by default.
 2. **Live vs. dataset distribution shift:** models trained on CIC capture conditions may misfire on a home network. *Mitigation:* feature set restricted to live-computable flow stats, cross-dataset eval, and a PCAP-replay + simulator test in the demo.
 3. **Flow-meter choice:** custom Scapy flow builder (full control, slower) vs. CICFlowMeter (feature-compatible, Java). *Decided:* Scapy builder replicating the CIC feature definitions; validate against CICFlowMeter on a sample PCAP.
-4. **Scope:** Celery, Prometheus/Grafana, and mitigation are stage-later items; core value is Phases 3–6.
+4. **Scope:** Prometheus/Grafana and mitigation are stage-later items; core value is Phases 3–6. *Decided (Phase 7):* no Celery; an asyncio notifier over a PostgreSQL outbox.
 5. **Naming:** repo is `DDoS-System`; *Decided:* product name **SentinelAI**.
 
 ## 14. Limitations (to be stated in README)

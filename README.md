@@ -33,8 +33,8 @@ and botnet traffic are the weak spot per flow; see the
 | 4 | ML pipeline: CIC-IDS2017, LR / RF / XGBoost, evaluation, SHAP, model bundles | ✅ Done |
 | 5 | Real-time engine: flow builder, PCAP replay, live capture, simulator, port-scan rule, risk engine | ✅ Done |
 | 6 | SOC dashboard on the live API: overview, live traffic, alerts workflow, audit, settings, users | ✅ Done |
-| 7 | Notifications and background workers | ⏳ Next |
-| 8 | Documentation, performance, optional monitoring | ⏳ |
+| 7 | Notifications (email, Slack, signed webhooks) with retries and per-alert de-duplication; data retention | ✅ Done |
+| 8 | Documentation, performance, optional monitoring | ⏳ Next |
 
 ## Quick start
 
@@ -68,7 +68,22 @@ ENGINE_SCENARIO=demo docker compose up -d engine     # normal -> DDoS -> port sc
 
 PCAP replay and live capture are described in [`engine/README.md`](engine/README.md).
 
-Check the whole stack with `ADMIN_PASSWORD=… ./scripts/smoke_test.sh`, and the
+**Notifications.** Admins add email, Slack or webhook channels under
+*Notifications* in the dashboard; each channel hears about an alert once per
+severity band, with retries and a delivery log. To try email without a real
+mail server, start the bundled mail catcher and open <http://localhost:8025>:
+
+```bash
+COMPOSE_PROFILES=mail SMTP_HOST=mailpit SMTP_PORT=1025 SMTP_SECURITY=none \
+  docker compose up -d --wait
+```
+
+For a real relay set the `SMTP_*` variables in `.env` (see `.env.example`).
+The notifier also enforces data retention (flows kept 14 days unless they are
+evidence for an alert; the audit log is never purged).
+
+Check the whole stack with `ADMIN_PASSWORD=… ./scripts/smoke_test.sh` (add
+`MAILPIT_URL=http://localhost:8025` with the mail profile to verify alert emails), and the
 dashboard end to end with `cd frontend && ADMIN_PASSWORD=… npm run test:e2e`
 (Playwright: sign in, live DDoS alert, acknowledge → contain → resolve). Stop it
 with `docker compose down` (add `-v` to delete the database volume as well).
