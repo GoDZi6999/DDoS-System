@@ -48,6 +48,20 @@ docker compose exec engine python -m sentinel_engine inject --scenario portscan 
 Weights follow the admin-editable detection settings (`PUT /api/v1/config/detection`),
 which the API mirrors to Redis; the engine re-reads them every 10 s. Benign flows score 0.
 
+## Performance
+
+```bash
+python -m sentinel_engine bench          # needs no Redis; prints a Markdown report
+```
+
+On a 4-core VM: ~4.7 ms per benign flow and ~11 ms per attack flow when
+classified one at a time; in one-second batches of 100 flows, ~9,500 flows/s
+of benign traffic and ~10,000 flows/s during a flood. SHAP explanations cost
+about ten times a prediction, so each (attack type, destination) gets at most
+5 explained flows per second (`EXPLAIN_PER_TARGET_S`); the other attack flows
+carry an empty explanation and the alert keeps the explanation it has. Full
+numbers and method: [`docs/PERFORMANCE.md`](../docs/PERFORMANCE.md).
+
 ## Honest limits
 
 - The simulator's attack statistics come from CIC-IDS2017, so a demo shows the model on
@@ -57,8 +71,8 @@ which the API mirrors to Redis; the engine re-reads them every 10 s. Benign flow
   as FALSE_POSITIVE.
 - The flow builder follows CICFlowMeter's definitions but has not yet been checked
   feature-by-feature against CICFlowMeter on the same capture.
-- Pure-Python capture suits lab and small networks (the simulated pipeline processes
-  ~900 flows/s on 4 cores), not line rate.
+- Classification keeps up with ~10,000 flows/s, but packet capture and flow assembly
+  with Scapy are pure Python: they suit lab and small networks, not line rate.
 
 ## Test
 
