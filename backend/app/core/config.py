@@ -34,6 +34,9 @@ class Settings(BaseSettings):
     initial_admin_username: str = "admin"
     initial_admin_password: SecretStr | None = None
 
+    # Prometheus metrics at /metrics (not proxied by the dashboard).
+    metrics_enabled: bool = True
+
     # Notifications (Phase 7). Email channels need an SMTP relay; without
     # SMTP_HOST their deliveries fail with a clear error.
     smtp_host: str | None = None

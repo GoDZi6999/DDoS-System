@@ -32,6 +32,10 @@ ready="$(curl -sS "$BACKEND_URL/health/ready")" || fail "backend unreachable"
 echo "   $ready"
 grep -q '"status":"ready"' <<<"$ready" || fail "a backend dependency is down"
 
+echo "-> backend metrics    $BACKEND_URL/metrics"
+metrics="$(curl -fsS "$BACKEND_URL/metrics")" || fail "metrics endpoint unreachable"
+grep -q '^sentinel_open_alerts{severity="CRITICAL"}' <<<"$metrics" || fail "pipeline gauges missing from /metrics"
+
 echo "-> frontend status    $FRONTEND_URL/status"
 page="$(curl -fsS "$FRONTEND_URL/status")" || fail "frontend unreachable"
 grep -q "All systems operational" <<<"$page" \

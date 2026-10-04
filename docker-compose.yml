@@ -81,6 +81,7 @@ services:
       DATABASE_URL: *app-database-url
       REDIS_URL: redis://redis:6379/0
       JWT_SECRET: ${JWT_SECRET:-}
+      METRICS_ENABLED: ${METRICS_ENABLED:-true}
       # Trust X-Forwarded-For only from the dashboard server (its fixed
       # address below), so per-IP login throttling and audit entries see the
       # browser's address instead of the frontend container's.
@@ -199,6 +200,41 @@ services:
     networks: [egressnet]
     restart: unless-stopped
 
+  # Optional monitoring (profile "monitoring"): Prometheus scrapes the API's
+  # /metrics; Grafana shows a provisioned SentinelAI dashboard on
+  # http://localhost:3001 (user admin, GRAFANA_ADMIN_PASSWORD).
+  prometheus:
+    image: prom/prometheus:v3.7.0
+    profiles: [monitoring]
+    command: ["--config.file=/etc/prometheus/prometheus.yml", "--storage.tsdb.retention.time=7d"]
+    volumes:
+      - ./infrastructure/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - prometheusdata:/prometheus
+    ports:
+      - "127.0.0.1:${PROMETHEUS_PORT:-9090}:9090"
+    networks: [frontnet]
+    restart: unless-stopped
+
+  grafana:
+    image: grafana/grafana:12.2.0
+    profiles: [monitoring]
+    environment:
+      GF_SECURITY_ADMIN_USER: admin
+      GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_ADMIN_PASSWORD:-change-me-grafana}
+      GF_USERS_ALLOW_SIGN_UP: "false"
+      GF_ANALYTICS_REPORTING_ENABLED: "false"
+      GF_ANALYTICS_CHECK_FOR_UPDATES: "false"
+      GF_DASHBOARDS_DEFAULT_HOME_DASHBOARD_PATH: /var/lib/grafana/dashboards/sentinelai.json
+    volumes:
+      - ./infrastructure/grafana/provisioning:/etc/grafana/provisioning:ro
+      - ./infrastructure/grafana/dashboards:/var/lib/grafana/dashboards:ro
+      - grafanadata:/var/lib/grafana
+    depends_on: [prometheus]
+    ports:
+      - "127.0.0.1:${GRAFANA_PORT:-3001}:3000"
+    networks: [frontnet]
+    restart: unless-stopped
+
   frontend:
     build: ./frontend
     environment:
@@ -236,3 +272,5 @@ networks:
 volumes:
   pgdata:
   redisdata:
+  prometheusdata:
+  grafanadata:
