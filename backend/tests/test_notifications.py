@@ -200,7 +200,8 @@ def test_alert_crossing_a_channel_threshold_later_is_notified(client, admin_head
     ingest(client, risk_score=50)
     assert deliveries(client) == []
     ingest(client, risk_score=90)
-    assert [d.event for d in deliveries(client)] == ["alert.escalated"]
+    # First message on this channel about the alert: worded as a new alert.
+    assert [d.event for d in deliveries(client)] == ["alert.created"]
 
 
 def test_channel_rate_limit_suppresses_excess_deliveries(client, admin_headers):

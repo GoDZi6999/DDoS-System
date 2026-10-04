@@ -2,7 +2,7 @@
 import { useState } from "react";
 import useSWR from "swr";
 import { PageHeader } from "@/components/shell";
-import { Button, Card, Field, Notice, Skeleton, inputClass } from "@/components/ui";
+import { Button, Card, Field, Notice, Skeleton, inputBase, inputClass } from "@/components/ui";
 import { send } from "@/lib/api";
 import { formatTime } from "@/lib/format";
 import { hasRole, useMe } from "@/lib/user";
@@ -71,7 +71,7 @@ export function UsersView() {
                           aria-label={`Role of ${user.username}`}
                           value={user.role}
                           onChange={(e) => update(user, { role: e.target.value as Role })}
-                          className={`${inputClass} w-auto py-1`}
+                          className={`${inputBase} w-auto py-1`}
                         >
                           {ROLES.map((r) => (
                             <option key={r.value} value={r.value}>

@@ -133,8 +133,10 @@ export function Button({ variant = "secondary", className = "", ...props }: Butt
   );
 }
 
-export const inputClass =
-  "w-full rounded-lg border border-line bg-raised px-3 py-1.5 text-sm text-ink placeholder:text-muted focus:outline-2 focus:outline-accent";
+/** Input styling without a width, for controls that size themselves. */
+export const inputBase =
+  "rounded-lg border border-line bg-raised px-3 py-1.5 text-sm text-ink placeholder:text-muted focus:outline-2 focus:outline-accent";
+export const inputClass = `${inputBase} w-full`;
 
 export function Field({
   label,

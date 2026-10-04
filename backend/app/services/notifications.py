@@ -129,15 +129,30 @@ async def enqueue_for_alert(session: AsyncSession, alert: Alert, *, created: boo
     meets. Each channel hears about an alert once per severity band, so a
     flood that keeps updating its alert does not send repeated messages.
     Returns the number of deliveries queued."""
-    event = NotificationEvent.ALERT_CREATED if created else NotificationEvent.ALERT_ESCALATED
     level = SEVERITY_ORDER.index(alert.severity)
     channels = await session.scalars(
         select(NotificationChannel).where(NotificationChannel.enabled.is_(True))
     )
+    notified = set()
+    if not created:
+        notified = set(
+            await session.scalars(
+                select(NotificationDelivery.channel_id).where(
+                    NotificationDelivery.alert_id == alert.id
+                )
+            )
+        )
     queued = 0
     for channel in channels:
         if level < SEVERITY_ORDER.index(channel.min_severity):
             continue
+        # A channel's first message about an alert reads as a new alert, even
+        # when the alert only now crossed the channel's threshold.
+        event = (
+            NotificationEvent.ALERT_ESCALATED
+            if channel.id in notified
+            else NotificationEvent.ALERT_CREATED
+        )
         delivery_id = await _queue(
             session,
             channel,

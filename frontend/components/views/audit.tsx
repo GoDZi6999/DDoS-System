@@ -2,7 +2,7 @@
 import { useState } from "react";
 import useSWR from "swr";
 import { PageHeader } from "@/components/shell";
-import { Button, Card, Notice, Pagination, Skeleton, inputClass } from "@/components/ui";
+import { Button, Card, Notice, Pagination, Skeleton, inputBase } from "@/components/ui";
 import { formatTime } from "@/lib/format";
 import { hasRole, useMe } from "@/lib/user";
 import type { AuditEntry, Page } from "@/lib/types";
@@ -82,7 +82,7 @@ export function AuditView() {
               setAction(e.target.value);
               setOffset(0);
             }}
-            className={`${inputClass} w-auto`}
+            className={`${inputBase} w-auto`}
           >
             <option value="">All actions</option>
             {ACTIONS.map((a) => (
@@ -104,7 +104,7 @@ export function AuditView() {
               placeholder="Actor (username)"
               value={actorDraft}
               onChange={(e) => setActorDraft(e.target.value)}
-              className={`${inputClass} w-48`}
+              className={`${inputBase} w-48`}
             />
             <Button type="submit">Filter</Button>
           </form>

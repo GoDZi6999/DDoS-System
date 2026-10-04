@@ -96,3 +96,33 @@ test("settings show the detection configuration to an admin", async ({ page }) =
   await expect(page.getByText("Total: 100%")).toBeVisible();
   await expect(page.getByRole("button", { name: "Save settings" })).toBeEnabled();
 });
+
+test("an admin adds an email channel and its test message is delivered", async ({ page, request }) => {
+  const mailpit = process.env.MAILPIT_URL;
+  await page.goto("/notifications");
+  await signIn(page);
+  await expect(page.getByRole("heading", { name: "Notifications" })).toBeVisible();
+
+  const name = `E2E mail ${Date.now()}`;
+  await page.getByLabel("Name").fill(name);
+  await page.getByLabel("Recipients").fill("e2e@example.com");
+  await page.getByRole("button", { name: "Add channel" }).click();
+  await expect(page.getByText(`Added ${name}.`)).toBeVisible();
+
+  const row = page.getByRole("listitem").filter({ hasText: name });
+  await row.getByRole("button", { name: "Send test" }).click();
+  await expect(row.getByText("Test queued")).toBeVisible();
+
+  // The notifier picks the delivery up within seconds; the log refreshes itself.
+  const logRow = page.getByRole("row").filter({ hasText: `channel '${name}'` });
+  if (mailpit) {
+    await expect(logRow.getByText("Sent", { exact: true })).toBeVisible({ timeout: 30_000 });
+    const messages = await (await request.get(`${mailpit}/api/v1/messages`)).json();
+    expect(messages.messages.map((m: { Subject: string }) => m.Subject)).toContain(
+      `SentinelAI test notification for channel '${name}'`,
+    );
+  } else {
+    // Without an SMTP relay the delivery fails with a clear reason.
+    await expect(logRow.getByText(/Sent|Failed/)).toBeVisible({ timeout: 30_000 });
+  }
+});
