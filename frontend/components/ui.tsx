@@ -130,15 +130,12 @@ export function Notice({
   return (
     <p
       role={tone === "error" ? "alert" : "status"}
-      className={`rounded-sm border px-3 py-2 font-mono text-xs ${
+      className={`rounded-sm border px-3 py-2 font-mono text-xs before:mr-1.5 ${
         tone === "error"
-          ? "border-critical/50 bg-critical/10 text-ink"
-          : "border-line bg-sunken text-ink-2"
+          ? "border-critical/50 bg-critical/10 text-ink before:text-critical before:content-['✕']"
+          : "border-line bg-sunken text-ink-2 before:text-accent before:content-['›']"
       }`}
     >
-      <span aria-hidden className={tone === "error" ? "text-critical" : "text-accent"}>
-        {tone === "error" ? "✕ " : "› "}
-      </span>
       {children}
     </p>
   );

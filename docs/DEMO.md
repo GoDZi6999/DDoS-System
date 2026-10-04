@@ -14,9 +14,13 @@ docker compose logs migrate                  # the generated admin password, sho
 Open <http://localhost:3000> and sign in as `admin`. (Lost the password?
 `docker compose exec backend python -m app.cli reset-password admin`.)
 
+![Sign-in screen](images/login.png)
+
 ## 2. Normal traffic
 
-The **Overview** shows the engine classifying simulated lab traffic: about 15
+The **Overview** is a SOC console: the threat level (highest open severity)
+and a UTC clock in the top bar, a terminal-style *Event feed* of alert events
+as they happen, and the engine classifying simulated lab traffic: about 15
 benign flows per second on the *Live traffic* chart, KPI tiles for the last 24
 hours, attack types and open alerts. A few low-confidence alerts may appear
 over time: the model's ~0.2% false-positive rate on benign flows. Closing them
@@ -51,7 +55,7 @@ Open the alert:
   does not block traffic.
 - **Detections**: the latest flows aggregated into the alert.
 
-![Alert detail (dark mode)](images/alert-detail.png)
+![Alert detail](images/alert-detail.png)
 
 Work it: **Acknowledge**, **Assign to me**, add a note, **Mark contained**,
 **Resolve**. Every step lands in *History* and in the **Audit log**

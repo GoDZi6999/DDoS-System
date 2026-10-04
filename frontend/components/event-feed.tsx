@@ -28,15 +28,15 @@ export function EventFeed() {
       ) : (
         <ol className="space-y-1">
           {feed.map((event) => (
-            <li key={event.id} className="feed-in flex gap-2">
+            <li key={event.id} className="feed-in flex gap-1.5">
               <span className="tabular shrink-0 text-muted">{clock(event.at)}</span>
               <span
-                className="w-14 shrink-0 font-semibold uppercase"
+                className="w-9 shrink-0 font-semibold uppercase"
                 style={{ color: severityColor(event.alert.severity) }}
               >
                 {event.alert.severity.slice(0, 4)}
               </span>
-              <span className="w-12 shrink-0 uppercase text-ink-2">
+              <span className="w-7 shrink-0 uppercase text-ink-2">
                 {event.kind === "alert.new" ? "new" : "upd"}
               </span>
               <Link href={`/alerts/${event.alert.id}`} className="min-w-0 truncate text-ink hover:text-accent">

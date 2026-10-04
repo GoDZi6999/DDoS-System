@@ -42,8 +42,15 @@ Next.js is a backend-for-frontend (`lib/session.ts`):
   `/login?next=…` before rendering.
 - Security headers and a same-origin CSP are set in `next.config.ts`.
 
-Charts use Recharts with the design tokens in `app/globals.css` (benign =
-series blue, attack = status red, always labelled; light and dark mode).
+**Look and feel.** A dark SOC-console theme: HUD panels with corner
+brackets, a left navigation rail, a threat-level indicator (highest open
+severity), a UTC clock, a terminal-style live event feed and monospace data.
+Tokens live in `app/globals.css`. Fonts (Chakra Petch, Inter, JetBrains Mono)
+are vendored in `app/fonts` under the SIL Open Font License, so builds need no
+network. Charts use Recharts with a palette validated for colour-blind
+separation and contrast on the panel surface (benign `#1a9fd6`, attack
+`#e8394a`). Severity and status colours always come with a label and a glyph,
+and animations stop under `prefers-reduced-motion`.
 
 ## Run locally (without Docker)
 

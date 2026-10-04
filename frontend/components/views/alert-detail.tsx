@@ -293,7 +293,7 @@ function Detections({ data }: { data?: Page<EventSummary> }) {
             <th className="px-4 py-2 text-right font-medium sm:pr-0">Risk</th>
           </tr>
         </thead>
-        <tbody className="tabular">
+        <tbody className="tabular font-mono text-xs">
           {data.items.map((event) => (
             <tr key={event.id} className="border-b border-line last:border-0">
               <td className="px-4 py-2 text-ink-2 sm:pl-0">{formatTime(event.ts)}</td>

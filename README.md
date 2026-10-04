@@ -30,9 +30,10 @@ traffic: simulator | PCAP replay | live capture
 - **Real time.** A flow becomes a committed alert in ~1.7 s. The engine
   classifies ~10,000 flows/s during a flood; one alert absorbs the flood and
   escalates with its risk. See [performance](docs/PERFORMANCE.md).
-- **SOC workflow.** NEW → INVESTIGATING → CONTAINED → RESOLVED (or false
-  positive), assignment, notes, history, a risk breakdown and a recommended
-  action. Three roles: admin, analyst, viewer.
+- **SOC console.** A dark analyst console with a live threat level, event feed
+  and traffic chart; the workflow runs NEW → INVESTIGATING → CONTAINED →
+  RESOLVED (or false positive) with assignment, notes, history, a risk
+  breakdown and a recommended action. Three roles: admin, analyst, viewer.
 - **Notifications that don't flood.** Email, Slack and HMAC-signed webhooks,
   queued in the same transaction as the alert change, retried with backoff,
   sent once per alert severity band.
@@ -45,7 +46,7 @@ traffic: simulator | PCAP replay | live capture
 
 | | |
 |---|---|
-| ![Alert detail with SHAP explanation](docs/images/alert-detail.png) | ![Notifications](docs/images/notifications.png) |
+| ![Alert detail with SHAP explanation](docs/images/alert-detail.png) | ![Sign-in screen](docs/images/login.png) |
 
 ## Quick start
 

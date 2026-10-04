@@ -1,16 +1,27 @@
 import type { Metadata, Viewport } from "next";
-import { Chakra_Petch, Inter, JetBrains_Mono } from "next/font/google";
+import localFont from "next/font/local";
 import "./globals.css";
 
-// Self-hosted at build time by next/font: no requests to Google at runtime,
-// so the same-origin CSP (font-src 'self') holds.
-const display = Chakra_Petch({
-  subsets: ["latin"],
-  weight: ["500", "600", "700"],
+// Fonts are vendored (app/fonts, SIL Open Font License) so builds need no
+// network access and the same-origin CSP (font-src 'self') holds.
+const display = localFont({
+  src: [
+    { path: "./fonts/chakra-petch-latin-500-normal.woff2", weight: "500" },
+    { path: "./fonts/chakra-petch-latin-600-normal.woff2", weight: "600" },
+    { path: "./fonts/chakra-petch-latin-700-normal.woff2", weight: "700" },
+  ],
   variable: "--font-display-face",
 });
-const body = Inter({ subsets: ["latin"], variable: "--font-body" });
-const mono = JetBrains_Mono({ subsets: ["latin"], variable: "--font-mono-face" });
+const body = localFont({
+  src: "./fonts/inter-latin-wght-normal.woff2",
+  weight: "100 900",
+  variable: "--font-body",
+});
+const mono = localFont({
+  src: "./fonts/jetbrains-mono-latin-wght-normal.woff2",
+  weight: "100 800",
+  variable: "--font-mono-face",
+});
 
 export const metadata: Metadata = {
   title: "SentinelAI",
