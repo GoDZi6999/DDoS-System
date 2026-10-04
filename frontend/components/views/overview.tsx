@@ -5,7 +5,8 @@ import useSWR from "swr";
 import { ActivityChart, DistributionBars, LiveTrafficChart } from "@/components/charts";
 import { AlertTable } from "@/components/alert-table";
 import { PageHeader } from "@/components/shell";
-import { Card, Notice, SeverityBadge, Skeleton, StatTile } from "@/components/ui";
+import { EventFeed } from "@/components/event-feed";
+import { Card, Notice, SeverityBadge, Skeleton, StatTile, severityColor } from "@/components/ui";
 import { formatCount, formatRate } from "@/lib/format";
 import { useLive } from "@/lib/live";
 import type { AlertSummary, Distribution, Page, StatsSummary, Timeseries } from "@/lib/types";
@@ -46,15 +47,15 @@ export function Overview() {
         title="Overview"
         description="Detections from the real-time engine. SentinelAI detects and alerts; it does not block traffic."
         actions={
-          <div role="group" aria-label="Time window" className="flex rounded-lg border border-line bg-raised p-0.5">
+          <div role="group" aria-label="Time window" className="flex rounded-sm border border-line-strong bg-sunken p-0.5">
             {(Object.keys(WINDOWS) as Window[]).map((w) => (
               <button
                 key={w}
                 type="button"
                 aria-pressed={w === window}
                 onClick={() => setWindow(w)}
-                className={`rounded-md px-2.5 py-1 text-xs font-medium ${
-                  w === window ? "bg-ink/10 text-ink" : "text-ink-2 hover:text-ink"
+                className={`rounded-sm px-2.5 py-1 font-mono text-xs uppercase ${
+                  w === window ? "bg-accent/15 text-accent-strong" : "text-ink-2 hover:text-ink"
                 }`}
               >
                 {w}
@@ -73,19 +74,23 @@ export function Overview() {
               label="Open alerts"
               value={formatCount(s.alerts_open)}
               detail={severities || "Nothing open"}
+              accent={s.alerts_open ? severityColor(s.severity) : "var(--status-good)"}
             />
             <StatTile
               label="Highest open risk"
               value={s.alerts_open ? s.risk_score : "–"}
               detail={s.alerts_open ? <SeverityBadge severity={s.severity} /> : "No open alerts"}
+              accent={s.alerts_open ? severityColor(s.severity) : "var(--status-good)"}
             />
             <StatTile
               label="Flows analysed"
               value={formatCount(s.events)}
               detail={WINDOW_LABEL[window]}
+              accent="var(--series-1)"
             />
             <StatTile
               label="Attack flows"
+              accent={s.attacks ? "var(--status-critical)" : "var(--status-good)"}
               value={formatCount(s.attacks)}
               detail={
                 s.events
@@ -99,7 +104,12 @@ export function Overview() {
         )}
       </div>
 
-      <LiveCard />
+      <div className="mt-4 grid gap-4 xl:grid-cols-3">
+        <LiveCard />
+        <Card title="Event feed" description="Alert events as they happen">
+          <EventFeed />
+        </Card>
+      </div>
 
       <div className="mt-4 grid gap-4 lg:grid-cols-3">
         <Card
@@ -149,26 +159,26 @@ function LiveCard() {
     <Card
       title="Live traffic"
       description="Flows classified per second by the engine, last 5 minutes"
-      className="mt-4"
+      className="xl:col-span-2"
       actions={
         last && (
-          <dl className="tabular flex gap-5 text-right text-xs">
+          <dl className="tabular flex gap-5 text-right font-mono text-xs">
             <div>
-              <dt className="text-muted">Flows</dt>
+              <dt className="label-caps text-muted">Flows</dt>
               <dd className="font-medium text-ink">{formatRate(last.flows_per_s, "")}</dd>
             </div>
             <div>
-              <dt className="text-muted">Packets</dt>
+              <dt className="label-caps text-muted">Packets</dt>
               <dd className="font-medium text-ink">{formatRate(last.packets_per_s, "")}</dd>
             </div>
             <div>
-              <dt className="text-muted">Attack flows</dt>
+              <dt className="label-caps text-muted">Attack flows</dt>
               <dd className="font-medium text-ink">
                 {formatRate(last.attacks_per_s ?? last.attacks, "")}
               </dd>
             </div>
             <div>
-              <dt className="text-muted">Active flows</dt>
+              <dt className="label-caps text-muted">Active flows</dt>
               <dd className="font-medium text-ink">{formatCount(last.active_flows)}</dd>
             </div>
           </dl>

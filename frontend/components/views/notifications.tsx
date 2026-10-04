@@ -99,7 +99,7 @@ function ChannelRow({ channel, onChange }: { channel: Channel; onChange: () => v
         <div className="min-w-0">
           <p className={`font-medium ${channel.enabled ? "text-ink" : "text-muted line-through"}`}>
             {channel.name}{" "}
-            <span className="rounded bg-ink/5 px-1.5 py-0.5 text-xs font-normal text-ink-2">
+            <span className="rounded bg-accent/5 px-1.5 py-0.5 text-xs font-normal text-ink-2">
               {KINDS.find((k) => k.value === channel.kind)?.label}
             </span>
           </p>
@@ -231,7 +231,7 @@ function EditTarget({ channel, onSave }: { channel: Channel; onSave: (body: obje
   const [max, setMax] = useState(String(channel.max_per_hour));
   return (
     <form
-      className="mt-3 space-y-3 rounded-lg bg-ink/[0.03] p-3"
+      className="mt-3 space-y-3 rounded-sm bg-sunken border border-line p-3"
       onSubmit={(e) => {
         e.preventDefault();
         onSave({ config: toConfig(channel.kind, values, true), max_per_hour: Number(max) });
@@ -358,7 +358,7 @@ function DeliveryLog() {
         <>
           <div className="-mx-4 overflow-x-auto sm:mx-0">
             <table className="w-full min-w-[720px] text-left text-sm">
-              <thead className="text-xs text-muted">
+              <thead className="label-caps text-muted">
                 <tr className="border-b border-line">
                   <th className="px-4 py-2 font-medium sm:pl-0">Queued</th>
                   <th className="px-2 py-2 font-medium">Channel</th>

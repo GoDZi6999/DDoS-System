@@ -1,81 +1,213 @@
 @import "tailwindcss";
 
-/* Design tokens. Chart colours follow the validated reference palette
-   (series-1 blue for benign traffic, status-critical for attacks); status
-   colours always appear with a text label, never alone. */
+/* SentinelAI SOC console theme (dark only).
+   Chart colours: benign #1a9fd6 and attack #e8394a, validated against the
+   panel surface (lightness band, CVD separation, contrast). Status colours
+   always appear with a text label and a glyph, never alone. */
 :root {
-  color-scheme: light;
-  --page: #f9f9f7;
-  --surface: #fcfcfb;
-  --surface-raised: #ffffff;
-  --border: rgba(11, 11, 11, 0.1);
-  --text-primary: #0b0b0b;
-  --text-secondary: #52514e;
-  --text-muted: #6b6a65;
-  --grid: #e1e0d9;
-  --axis: #c3c2b7;
-  --accent: #2a78d6;
-  --series-1: #2a78d6;
-  --status-good: #0ca30c;
-  --status-warning: #fab219;
-  --status-serious: #ec835a;
-  --status-critical: #d03b3b;
-  --status-neutral: #898781;
-}
-
-@media (prefers-color-scheme: dark) {
-  :root:where(:not([data-theme="light"])) {
-    color-scheme: dark;
-    --page: #0d0d0d;
-    --surface: #1a1a19;
-    --surface-raised: #222220;
-    --border: rgba(255, 255, 255, 0.1);
-    --text-primary: #ffffff;
-    --text-secondary: #c3c2b7;
-    --text-muted: #9a988f;
-    --grid: #2c2c2a;
-    --axis: #383835;
-    --accent: #3987e5;
-    --series-1: #3987e5;
-  }
-}
-
-:root[data-theme="dark"] {
   color-scheme: dark;
-  --page: #0d0d0d;
-  --surface: #1a1a19;
-  --surface-raised: #222220;
-  --border: rgba(255, 255, 255, 0.1);
-  --text-primary: #ffffff;
-  --text-secondary: #c3c2b7;
-  --text-muted: #9a988f;
-  --grid: #2c2c2a;
-  --axis: #383835;
-  --accent: #3987e5;
-  --series-1: #3987e5;
+  --page: #04070c;
+  --surface: #0a111c;
+  --surface-raised: #0f1928;
+  --surface-sunken: #060b13;
+  --border: rgba(56, 189, 248, 0.16);
+  --border-strong: rgba(56, 189, 248, 0.38);
+  --text-primary: #e6f1ff;
+  --text-secondary: #a3b6cc;
+  --text-muted: #71849a;
+  --grid: rgba(120, 160, 200, 0.12);
+  --axis: rgba(120, 160, 200, 0.28);
+  --accent: #22d3ee;
+  --accent-strong: #67e8f9;
+  --live: #34f5a0;
+  --series-1: #1a9fd6;
+  --status-good: #2fd17a;
+  --status-warning: #f5c04a;
+  --status-serious: #f08a3c;
+  --status-critical: #e8394a;
+  --status-neutral: #7d8da1;
 }
 
 @theme inline {
   --color-page: var(--page);
   --color-surface: var(--surface);
   --color-raised: var(--surface-raised);
+  --color-sunken: var(--surface-sunken);
   --color-line: var(--border);
+  --color-line-strong: var(--border-strong);
   --color-ink: var(--text-primary);
   --color-ink-2: var(--text-secondary);
   --color-muted: var(--text-muted);
   --color-accent: var(--accent);
+  --color-accent-strong: var(--accent-strong);
+  --color-live: var(--live);
   --color-good: var(--status-good);
   --color-warning: var(--status-warning);
   --color-serious: var(--status-serious);
   --color-critical: var(--status-critical);
-  --font-sans: system-ui, -apple-system, "Segoe UI", sans-serif;
+  --font-sans: var(--font-body), system-ui, sans-serif;
+  --font-display: var(--font-display-face), var(--font-body), system-ui, sans-serif;
+  --font-mono: var(--font-mono-face), ui-monospace, "SFMono-Regular", monospace;
+}
+
+html {
+  background: var(--page);
 }
 
 body {
-  background: var(--page);
   color: var(--text-primary);
+  background-color: var(--page);
+  /* Faint targeting grid with a cool glow from the top. */
+  background-image:
+    radial-gradient(ellipse 80% 50% at 50% -10%, rgba(34, 211, 238, 0.09), transparent 70%),
+    linear-gradient(var(--grid) 1px, transparent 1px),
+    linear-gradient(90deg, var(--grid) 1px, transparent 1px);
+  background-size:
+    100% 100%,
+    40px 40px,
+    40px 40px;
+  background-attachment: fixed;
+}
+
+::selection {
+  background: rgba(34, 211, 238, 0.3);
 }
 
 .tabular {
   font-variant-numeric: tabular-nums;
+}
+
+/* Small uppercase labels: section titles, table headers, KPI captions. */
+.label-caps {
+  font-family: var(--font-mono);
+  font-size: 0.68rem;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+}
+
+/* HUD panel: dark glass with corner brackets. */
+.hud {
+  position: relative;
+  background: linear-gradient(180deg, rgba(15, 25, 40, 0.92), rgba(10, 17, 28, 0.92));
+  border: 1px solid var(--border);
+  box-shadow:
+    inset 0 1px 0 rgba(103, 232, 249, 0.06),
+    0 10px 30px -18px rgba(0, 0, 0, 0.9);
+  backdrop-filter: blur(4px);
+}
+.hud::before,
+.hud::after {
+  content: "";
+  position: absolute;
+  width: 12px;
+  height: 12px;
+  border-color: var(--accent);
+  pointer-events: none;
+  opacity: 0.75;
+}
+.hud::before {
+  top: -1px;
+  left: -1px;
+  border-top: 2px solid;
+  border-left: 2px solid;
+}
+.hud::after {
+  right: -1px;
+  bottom: -1px;
+  border-right: 2px solid;
+  border-bottom: 2px solid;
+}
+
+.hud-critical {
+  border-color: rgba(232, 57, 74, 0.55);
+  box-shadow:
+    0 0 0 1px rgba(232, 57, 74, 0.15),
+    0 0 28px -6px rgba(232, 57, 74, 0.45);
+}
+.hud-critical::before,
+.hud-critical::after {
+  border-color: var(--status-critical);
+}
+
+.glow-text {
+  text-shadow: 0 0 18px rgba(34, 211, 238, 0.45);
+}
+
+/* Live indicator and attention pulses; disabled for reduced motion. */
+@keyframes pulse-ring {
+  0% {
+    box-shadow: 0 0 0 0 currentColor;
+  }
+  70% {
+    box-shadow: 0 0 0 6px transparent;
+  }
+  100% {
+    box-shadow: 0 0 0 0 transparent;
+  }
+}
+.pulse {
+  animation: pulse-ring 1.8s ease-out infinite;
+}
+
+@keyframes scan {
+  from {
+    transform: translateY(-100%);
+  }
+  to {
+    transform: translateY(100%);
+  }
+}
+.scanline {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  pointer-events: none;
+}
+.scanline::after {
+  content: "";
+  position: absolute;
+  left: 0;
+  right: 0;
+  height: 40%;
+  background: linear-gradient(180deg, transparent, rgba(34, 211, 238, 0.06), transparent);
+  animation: scan 6s linear infinite;
+}
+
+@keyframes radar {
+  to {
+    transform: rotate(360deg);
+  }
+}
+.radar-sweep {
+  animation: radar 4s linear infinite;
+  transform-origin: 50% 50%;
+}
+
+@keyframes feed-in {
+  from {
+    opacity: 0;
+    transform: translateX(-6px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+.feed-in {
+  animation: feed-in 0.35s ease-out;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .pulse,
+  .scanline::after,
+  .radar-sweep,
+  .feed-in {
+    animation: none;
+  }
+}
+
+/* Thin, themed scrollbars for tables and the event feed. */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: rgba(56, 189, 248, 0.25) transparent;
 }

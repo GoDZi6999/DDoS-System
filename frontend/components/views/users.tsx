@@ -48,7 +48,7 @@ export function UsersView() {
           ) : (
             <div className="-mx-4 overflow-x-auto sm:mx-0">
               <table className="w-full min-w-[560px] text-left text-sm">
-                <thead className="text-xs text-muted">
+                <thead className="label-caps text-muted">
                   <tr className="border-b border-line">
                     <th className="px-4 py-2 font-medium sm:pl-0">User</th>
                     <th className="px-2 py-2 font-medium">Role</th>

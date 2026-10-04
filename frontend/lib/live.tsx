@@ -5,13 +5,33 @@
 import { createContext, useContext, useEffect, useRef, useState } from "react";
 import { useSWRConfig } from "swr";
 import { fetcher } from "@/lib/api";
-import type { LiveMessage, TrafficTick } from "@/lib/types";
+import type { AlertSummary, LiveMessage, TrafficTick } from "@/lib/types";
 
 export type LiveStatus = "connecting" | "live" | "offline";
 
-type LiveState = { status: LiveStatus; ticks: TrafficTick[]; lastAlertAt: number };
+export type FeedEvent = {
+  id: string;
+  at: number;
+  kind: "alert.new" | "alert.updated";
+  alert: AlertSummary;
+};
 
-const LiveContext = createContext<LiveState>({ status: "connecting", ticks: [], lastAlertAt: 0 });
+type LiveState = {
+  status: LiveStatus;
+  ticks: TrafficTick[];
+  lastAlertAt: number;
+  feed: FeedEvent[];
+};
+
+const LiveContext = createContext<LiveState>({
+  status: "connecting",
+  ticks: [],
+  lastAlertAt: 0,
+  feed: [],
+});
+
+/** Alert events kept for the console's event feed (newest first). */
+const MAX_FEED = 40;
 
 /** Ticks kept for the live chart: one per second, so five minutes. */
 const MAX_TICKS = 300;
@@ -48,6 +68,7 @@ export function LiveProvider({ children }: { children: React.ReactNode }) {
     status: "connecting",
     ticks: [],
     lastAlertAt: 0,
+    feed: [],
   });
 
   useEffect(() => {
@@ -90,7 +111,23 @@ export function LiveProvider({ children }: { children: React.ReactNode }) {
           const ticks = aggregate(buckets.current);
           setState((s) => ({ ...s, ticks }));
         } else if (message.type === "alert.new" || message.type === "alert.updated") {
-          setState((s) => ({ ...s, lastAlertAt: Date.now() }));
+          const now = Date.now();
+          const event: FeedEvent = {
+            id: `${now}-${message.data.id}-${Math.random().toString(36).slice(2, 7)}`,
+            at: now,
+            kind: message.type,
+            alert: message.data,
+          };
+          setState((s) => {
+            // A flood updates one alert many times a second: keep the feed
+            // readable by replacing a consecutive update of the same alert.
+            const head = s.feed[0];
+            const rest =
+              head && head.alert.id === event.alert.id && event.kind === "alert.updated"
+                ? s.feed.slice(1)
+                : s.feed;
+            return { ...s, lastAlertAt: now, feed: [event, ...rest].slice(0, MAX_FEED) };
+          });
           revalidate();
         }
       };

@@ -6,7 +6,7 @@ import { Button, Field, Notice, inputClass } from "@/components/ui";
 export function LoginForm({ next }: { next: string }) {
   const [state, action, pending] = useActionState<LoginState, FormData>(loginAction, {});
   return (
-    <form action={action} className="mt-6 space-y-4 rounded-xl border border-line bg-surface p-5">
+    <form action={action} className="hud mt-6 space-y-4 p-5">
       <input type="hidden" name="next" value={next} />
       <Field label="Username">
         <input
@@ -29,7 +29,7 @@ export function LoginForm({ next }: { next: string }) {
       </Field>
       {state.error && <Notice tone="error">{state.error}</Notice>}
       <Button type="submit" variant="primary" disabled={pending} className="w-full">
-        {pending ? "Signing in…" : "Sign in"}
+        {pending ? "Authenticating…" : "Sign in"}
       </Button>
     </form>
   );
