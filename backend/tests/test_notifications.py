@@ -215,6 +215,19 @@ def test_channel_rate_limit_suppresses_excess_deliveries(client, admin_headers):
     assert "rate limit" in statuses[1][1]
 
 
+def test_rate_limited_channel_still_hears_new_alert_wording_later(client, admin_headers):
+    make_channel(client, admin_headers, min_severity="MEDIUM", max_per_hour=1)
+    ingest(client, risk_score=90, dst_ip="203.0.113.1")  # uses the hourly budget
+    ingest(client, risk_score=50, dst_ip="203.0.113.2")  # suppressed (rate limit)
+    set_delivery(
+        client, deliveries(client)[0].id, created_at=datetime.now(UTC) - timedelta(hours=2)
+    )
+    ingest(client, risk_score=75, dst_ip="203.0.113.2")  # escalates: first real message
+
+    last = deliveries(client)[-1]
+    assert (last.status, last.event) == (DeliveryStatus.PENDING, "alert.created")
+
+
 # --- worker and senders ------------------------------------------------------
 
 

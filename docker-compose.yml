@@ -82,6 +82,9 @@ services:
       REDIS_URL: redis://redis:6379/0
       JWT_SECRET: ${JWT_SECRET:-}
       METRICS_ENABLED: ${METRICS_ENABLED:-true}
+      # Links in test notifications; the channel-URL check on save.
+      DASHBOARD_URL: ${DASHBOARD_URL:-http://localhost:3000}
+      NOTIFY_ALLOW_PRIVATE_TARGETS: ${NOTIFY_ALLOW_PRIVATE_TARGETS:-false}
       # Trust X-Forwarded-For only from the dashboard server (its fixed
       # address below), so per-IP login throttling and audit entries see the
       # browser's address instead of the frontend container's.
@@ -112,6 +115,8 @@ services:
     environment:
       DATABASE_URL: *app-database-url
       REDIS_URL: redis://redis:6379/0
+      # The alert engine writes notification payloads, including the alert link.
+      DASHBOARD_URL: ${DASHBOARD_URL:-http://localhost:3000}
     depends_on:
       migrate:
         condition: service_completed_successfully

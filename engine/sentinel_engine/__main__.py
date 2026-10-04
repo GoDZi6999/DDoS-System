@@ -38,7 +38,9 @@ def main(argv: list[str] | None = None) -> int:
     run.add_argument("--filter", help="BPF filter for live capture")
 
     inject = commands.add_parser("inject", help="simulate one attack burst (no background)")
-    inject.add_argument("--scenario", choices=sorted(set(SCENARIOS) - {"normal", "demo"}))
+    inject.add_argument(
+        "--scenario", required=True, choices=sorted(set(SCENARIOS) - {"normal", "demo"})
+    )
     inject.add_argument("--duration", type=float, default=20)
 
     bench = commands.add_parser("bench", help="measure classification latency and throughput")

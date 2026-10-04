@@ -138,7 +138,10 @@ async def enqueue_for_alert(session: AsyncSession, alert: Alert, *, created: boo
         notified = set(
             await session.scalars(
                 select(NotificationDelivery.channel_id).where(
-                    NotificationDelivery.alert_id == alert.id
+                    NotificationDelivery.alert_id == alert.id,
+                    # A rate-limited delivery was never sent: the channel has
+                    # not heard about the alert yet.
+                    NotificationDelivery.status != DeliveryStatus.SUPPRESSED,
                 )
             )
         )
