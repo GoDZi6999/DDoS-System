@@ -405,7 +405,10 @@ async def ingest_detection(
             alert.risk_score = d.risk_score
             alert.severity = severity
             alert.source_ip = d.src_ip
-            alert.explanation = explanation
+            # The engine explains only a sample of flood flows; keep the
+            # current explanation when this detection carries none.
+            if explanation:
+                alert.explanation = explanation
             alert.risk_components = d.risk_components
             alert.model_version = d.model_version
             alert.recommended_action = recommended_action(d.label, severity, d.src_ip, d.dst_ip)

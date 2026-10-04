@@ -49,7 +49,9 @@ def test_ddos_burst_is_detected_with_rising_risk_and_explanations(predictor):
 
     assert len(ddos) / len([d for d in published if d["src_ip"].startswith("198.51.100.")]) > 0.95
     assert all(d["dst_ip"] == ATTACKS["ddos"].target[0] for d in ddos)
-    assert all(d["explanation"] for d in ddos)
+    # Floods are explained on a sample (see test_explanations_are_budgeted).
+    assert ddos[0]["explanation"]
+    assert 0 < sum(bool(d["explanation"]) for d in ddos) < len(ddos)
     assert set(ddos[0]["risk_components"]) == {
         "ml_confidence",
         "traffic_anomaly",
@@ -142,3 +144,24 @@ def test_pcap_replay_builds_flows_from_real_packets(predictor, tmp_path):
     assert detection["packet_count"] == 6
     assert detection["features"]["syn_flag_count"] == 2
     jsonschema.validate(detection, SCHEMA)
+
+
+def test_explanations_are_budgeted_per_target_and_second(predictor):
+    engine = Engine(predictor, MemoryPublisher(), "sim", explain_per_target_s=5)
+    sim = Simulator.from_csv(PROFILES, realtime=False)
+
+    def flood(target, count):
+        return [sim._flow("ddos", f"198.51.100.{i % 200}", target, 80, T0) for i in range(count)]
+
+    def explained(detections, target):
+        return sum(
+            1
+            for d in detections
+            if d["dst_ip"] == target and d["label"] != "benign" and d["explanation"]
+        )
+
+    first = engine.handle_flows(flood("10.20.0.10", 40) + flood("10.20.0.11", 40), T0)
+    assert explained(first, "10.20.0.10") == 5
+    assert explained(first, "10.20.0.11") == 5  # each target has its own budget
+    assert explained(engine.handle_flows(flood("10.20.0.10", 40), T0 + 0.5), "10.20.0.10") == 0
+    assert explained(engine.handle_flows(flood("10.20.0.10", 40), T0 + 1), "10.20.0.10") == 5

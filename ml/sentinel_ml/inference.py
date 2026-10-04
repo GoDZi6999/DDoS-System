@@ -67,10 +67,20 @@ class Predictor:
             rows = np.arange(len(predictions))
             if explain == "attacks":
                 rows = np.flatnonzero([p.is_attack for p in predictions])
-            if len(rows):
-                explanations = self.explainer.explain(
-                    features.iloc[rows], best[rows], top_k=self.top_k
-                )
-                for row, items in zip(rows, explanations, strict=True):
-                    predictions[row].explanation = items
+            self.explain_rows(features, predictions, rows)
         return predictions
+
+    def explain_rows(
+        self, features: pd.DataFrame, predictions: list[Prediction], rows: np.ndarray
+    ) -> None:
+        """Attach SHAP explanations to the selected predictions (towards their
+        predicted class). Lets callers explain a sample when a flood would make
+        explaining every flow too slow."""
+        rows = np.asarray(rows, dtype=int)
+        if not len(rows):
+            return
+        classes = list(self.bundle.classes)
+        targets = np.array([classes.index(predictions[r].label) for r in rows])
+        explanations = self.explainer.explain(features.iloc[rows], targets, top_k=self.top_k)
+        for row, items in zip(rows, explanations, strict=True):
+            predictions[row].explanation = items

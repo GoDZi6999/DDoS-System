@@ -4,6 +4,7 @@
     python -m sentinel_engine run --source pcap --pcap capture.pcap --speed 2
     python -m sentinel_engine run --source live --interface eth0     (needs CAP_NET_RAW)
     python -m sentinel_engine inject --scenario ddos --duration 20   (attack burst only)
+    python -m sentinel_engine bench                                   (in-process benchmark)
 
 Environment: REDIS_URL, MODEL_BUNDLE, FLOW_PROFILES.
 """
@@ -40,7 +41,20 @@ def main(argv: list[str] | None = None) -> int:
     inject.add_argument("--scenario", choices=sorted(set(SCENARIOS) - {"normal", "demo"}))
     inject.add_argument("--duration", type=float, default=20)
 
+    bench = commands.add_parser("bench", help="measure classification latency and throughput")
+    bench.add_argument("--flows", type=int, default=3000)
+    bench.add_argument("--json", action="store_true")
+
     args = parser.parse_args(argv)
+    if args.command == "bench":
+        from sentinel_engine.bench import main as bench_main
+
+        return bench_main(
+            os.environ.get("MODEL_BUNDLE", DEFAULT_BUNDLE),
+            Path(os.environ.get("FLOW_PROFILES", DEFAULT_PROFILES)),
+            args.flows,
+            args.json,
+        )
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s %(message)s")
 
     from sentinel_ml.inference import Predictor
