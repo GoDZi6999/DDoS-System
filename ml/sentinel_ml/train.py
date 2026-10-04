@@ -1,11 +1,17 @@
 """End-to-end training: load -> clean -> split -> validate -> tune -> fit -> evaluate -> bundle.
 
-Selection and decision tuning use a validation set carved from the training
-split: the last 20% (capture order) of every (file, label) group's training
-part, at the real class mix. Every candidate is fitted on the rest, scored
-there, and gets per-class decision weights (decision.py). The best candidate
-by tuned validation macro-F1 is refitted on the whole training split and
-bundled with its weights. The test split is touched once, to report results.
+Selection uses a validation set carved from the training split: the last 20%
+(capture order) of every (file, label) group's training part, at the real
+class mix. Every candidate is fitted on the rest and scored there; the best is
+refitted on the whole training split and bundled. The test split is only used
+to report results.
+
+Decision weights (decision.py) are opt-in (tune_decisions=True): in the
+2026.10.04 run, weights tuned on the validation-stage model made the refitted
+model worse on test (macro-F1 0.817 vs 0.853 with argmax), because refitting
+on the latest part of each run shifts its probabilities. Without a held-out
+set for the refitted model they cannot be tuned reliably, so bundles decide
+by argmax unless asked otherwise.
 Run via `python -m sentinel_ml train`.
 """
 
@@ -96,6 +102,7 @@ def run(
     seed: int = 42,
     candidates: tuple[str, ...] = tuple(models.CANDIDATES),
     ablation: bool = True,
+    tune_decisions: bool = False,
 ) -> Path:
     started = time.perf_counter()
     paths = sorted(Path(data_dir).glob("*.csv"))
@@ -133,8 +140,9 @@ def run(
         )
         results[name] = outcome
 
-    selected = max(candidates, key=lambda n: results[n]["val_macro_f1"])
-    weights = results[selected]["weights"]
+    score = "val_macro_f1" if tune_decisions else "val_macro_f1_argmax"
+    selected = max(candidates, key=lambda n: results[n][score])
+    weights = results[selected]["weights"] if tune_decisions else np.ones(len(data.CLASSES))
     logger.info("Selected %s; refitting on all %d training rows", selected, len(X_train))
     t0 = time.perf_counter()
     pipeline = models.fit(models.CANDIDATES[selected](seed), X_train, y_train_enc)
@@ -198,7 +206,9 @@ def run(
             "train_class_counts": y_train.value_counts().to_dict(),
             "test_class_counts": split.y_test.value_counts().to_dict(),
         },
-        "selection": "highest validation macro-F1 after decision-weight tuning",
+        "selection": "highest validation macro-F1"
+        + (" after decision-weight tuning" if tune_decisions else " (argmax)"),
+        "decision_tuning": tune_decisions,
         "candidates": {n: summary(r) for n, r in results.items()},
         "ablation": None
         if ablation_result is None
@@ -279,12 +289,20 @@ def render_report(
         "",
         "| | Macro-F1 | Accuracy | Attack detection | False positives | Calibration error |",
         "|---|---:|---:|---:|---:|---:|",
-        f"| With tuned decision weights (shipped) | {final['macro_f1']:.4f} | "
+        f"| {'With tuned decision weights (shipped)' if metadata['decision_tuning'] else 'Shipped (argmax)'} | {final['macro_f1']:.4f} | "
         f"{_pct(final['accuracy'])} | {_pct(final['attack_detection_rate'])} | "
         f"{_pct(final['false_positive_rate'])} | {final['calibration_error']:.4f} |",
-        f"| Plain argmax | {final_argmax['macro_f1']:.4f} | {_pct(final_argmax['accuracy'])} | "
-        f"{_pct(final_argmax['attack_detection_rate'])} | "
-        f"{_pct(final_argmax['false_positive_rate'])} | {final_argmax['calibration_error']:.4f} |",
+        *(
+            [
+                f"| Plain argmax | {final_argmax['macro_f1']:.4f} | "
+                f"{_pct(final_argmax['accuracy'])} | "
+                f"{_pct(final_argmax['attack_detection_rate'])} | "
+                f"{_pct(final_argmax['false_positive_rate'])} | "
+                f"{final_argmax['calibration_error']:.4f} |"
+            ]
+            if metadata["decision_tuning"]
+            else []
+        ),
         "",
         "*Attack detection*: share of attack flows flagged as any attack. *False positives*: "
         "share of benign flows flagged as an attack. *Calibration error*: expected calibration "

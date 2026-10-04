@@ -113,15 +113,16 @@ def without_features(pipeline: Pipeline, drop: tuple[str, ...]) -> Pipeline:
     return Pipeline([("features", AblationPreprocessor(drop)), *pipeline.steps[1:]])
 
 
-def fit(pipeline: Pipeline, X: pd.DataFrame, y: np.ndarray, balanced: bool = False) -> Pipeline:
-    """Fit a candidate. XGBoost learns the class mix it is given (benign is
-    kept in full, so probabilities stay close to real base rates; rare
-    classes are handled by the tuned decision weights, see decision.py).
-    balanced=True gives it balanced sample weights instead. The linear and
-    forest baselines balance internally (class_weight)."""
+def fit(pipeline: Pipeline, X: pd.DataFrame, y: np.ndarray, weighting: str = "sqrt") -> Pipeline:
+    """Fit a candidate. Benign is kept in full, so XGBoost sees realistic base
+    rates; "sqrt" sample weights (square root of balanced) keep rare attack
+    classes from being swamped without pretending they are as common as
+    benign. "balanced" and "none" are the two extremes. The linear and forest
+    baselines balance internally (class_weight)."""
     params = {}
-    if balanced and isinstance(pipeline[-1], XGBClassifier):
-        params["model__sample_weight"] = compute_sample_weight("balanced", y)
+    if weighting != "none" and isinstance(pipeline[-1], XGBClassifier):
+        weights = compute_sample_weight("balanced", y)
+        params["model__sample_weight"] = np.sqrt(weights) if weighting == "sqrt" else weights
     return pipeline.fit(X, y, **params)
 
 

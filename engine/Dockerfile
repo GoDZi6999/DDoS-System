@@ -19,6 +19,8 @@ RUN pip install -r engine/requirements.txt
 COPY ml/sentinel_ml ml/sentinel_ml
 COPY engine/sentinel_engine engine/sentinel_engine
 COPY models/sentinel-flow/2026.10.03 models/sentinel-flow/2026.10.03
+# Candidate model (opt-in with MODEL_BUNDLE); see ml/reports/2026.10.04.
+COPY models/sentinel-flow/2026.10.04 models/sentinel-flow/2026.10.04
 COPY data/samples/flow_profiles.csv data/samples/flow_profiles.csv
 
 USER app

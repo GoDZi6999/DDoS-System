@@ -76,4 +76,4 @@ def trained_bundle(dataset_dir, tmp_path_factory) -> Path:
     from sentinel_ml.train import run
 
     root = tmp_path_factory.mktemp("artifacts")
-    return run(dataset_dir, root / "models", root / "reports", cap=500)
+    return run(dataset_dir, root / "models", root / "reports", cap=500, tune_decisions=True)

@@ -23,8 +23,10 @@ traffic: simulator | PCAP replay | live capture
 - **Model you can check.** XGBoost on CIC-IDS2017, evaluated on a held-out
   set of 652,904 flows after deduplication and a temporal split: 99.48%
   accuracy, 99.27% of attack flows detected, 0.20% of benign flows flagged.
-  Every alert carries the SHAP factors behind it. Per-class results and the
-  weak spots are in the [ML methodology](docs/ML_METHODOLOGY.md).
+  Every alert carries the SHAP factors behind it. An opt-in candidate model
+  (2026.10.04) halves false positives (0.11%) at some cost in botnet recall.
+  Per-class results, the weak spots and the release gate are in the
+  [ML methodology](docs/ML_METHODOLOGY.md).
 - **Real time.** A flow becomes a committed alert in ~1.7 s. The engine
   classifies ~10,000 flows/s during a flood; one alert absorbs the flood and
   escalates with its risk. See [performance](docs/PERFORMANCE.md).

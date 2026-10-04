@@ -25,7 +25,7 @@ def test_training_writes_a_complete_bundle_and_report(trained_bundle):
     assert metadata["dataset"]["cleaning"]["dropped_exact_duplicates"] == 6
     weights = metadata["decision_weights"]
     assert set(weights) == set(data.CLASSES) and weights["benign"] == 1.0
-    assert all(0 < w <= 1 for w in weights.values())  # tuning only makes it more conservative
+    assert all(0.2 <= w <= 1 for w in weights.values())  # more conservative, never silenced
     assert metadata["ablation"]["dropped"] == ["init_win_bytes_fwd", "init_win_bytes_bwd"]
     assert 0 <= metadata["metrics"]["calibration_error"] <= 1
     # Synthetic classes are well separated, so every candidate should learn them.

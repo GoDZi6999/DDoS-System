@@ -25,6 +25,9 @@ def main(argv: list[str] | None = None) -> int:
         "--cap", type=int, default=150_000, help="max training rows per attack class"
     )
     train.add_argument("--no-ablation", action="store_true", help="skip the feature ablation")
+    train.add_argument(
+        "--tune-decisions", action="store_true", help="bundle tuned per-class decision weights"
+    )
     train.add_argument("--seed", type=int, default=42)
 
     predict = commands.add_parser("predict", help="classify flows from a CIC-format CSV")

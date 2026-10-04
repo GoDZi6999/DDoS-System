@@ -165,3 +165,11 @@ def test_explanations_are_budgeted_per_target_and_second(predictor):
     assert explained(first, "10.20.0.11") == 5  # each target has its own budget
     assert explained(engine.handle_flows(flood("10.20.0.10", 40), T0 + 0.5), "10.20.0.10") == 0
     assert explained(engine.handle_flows(flood("10.20.0.10", 40), T0 + 1), "10.20.0.10") == 5
+
+
+def test_candidate_bundle_detects_a_flood():
+    candidate = Predictor.from_bundle(ROOT / "models" / "sentinel-flow" / "2026.10.04")
+    assert candidate.weights.tolist() == [1.0] * len(candidate.bundle.classes)  # argmax
+    published = simulate(candidate, "ddos").published
+    flood = [d for d in published if d["src_ip"].startswith("198.51.100.")]
+    assert sum(d["label"] == "ddos" for d in flood) / len(flood) > 0.95

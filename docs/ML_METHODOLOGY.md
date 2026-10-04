@@ -1,8 +1,9 @@
 # ML methodology
 
 How SentinelAI's flow classifier is built and evaluated, and what the results
-do and do not show. Code: [`ml/`](../ml/README.md). Full generated report with
-plots: [`ml/reports/2026.10.03/report.md`](../ml/reports/2026.10.03/report.md).
+do and do not show. Code: [`ml/`](../ml/README.md). Full generated reports with
+plots: [`ml/reports/2026.10.03/report.md`](../ml/reports/2026.10.03/report.md) (default model)
+and [`ml/reports/2026.10.04/report.md`](../ml/reports/2026.10.04/report.md) (candidate, §8).
 
 ## 1. Problem
 
@@ -147,12 +148,90 @@ sizes, then inter-arrival-time statistics and packet sizes.
   flow-statistics models.
 - SHAP explains the model's reasoning, not ground-truth causality.
 
-## 8. Reproducing
+## 8. Model iteration (2026.10.04)
+
+A second iteration aimed at the weak spots: rare-class precision and the
+false-positive rate.
+
+**Diagnosis.** The 2026.10.03 recipe capped every class at 150,000 training
+flows *and* used balanced class weights, so the model saw benign as ~39% of
+traffic instead of ~85%. That prior pushes borderline flows towards attack
+classes, which is exactly where rare-class precision collapsed.
+
+**Method changes** (all in `sentinel_ml`):
+
+- Every benign training flow is kept (attack classes stay capped at 150,000).
+- Model selection uses a **validation set at the real class mix** (the last
+  20% of each attack run's training part) instead of cross-validation on
+  balanced subsamples, so selection sees the precision problem.
+- XGBoost uses square-root class weights: rare classes still count, without
+  pretending they are as common as benign.
+- Reports now include calibration error and an ablation without the TCP window
+  features.
+- Optional per-class decision weights (`--tune-decisions`, `decision.py`),
+  bounded to 0.2–1 so they can only make the model more conservative.
+
+**Experiments on validation** (test set untouched), XGBoost, macro-F1 with
+argmax → with tuned decision weights:
+
+| Variant | Macro-F1 | False positives |
+|---|---:|---:|
+| 2026.10.03 recipe (balanced weights, equal caps) | 0.914 → 0.942 | 0.06% |
+| All benign data, no class weights | 0.940 → 0.945 | 0.03% |
+| More benign, √ weights | 0.931 → 0.943 | 0.05% |
+| More benign, √ weights, without TCP window sizes | 0.771 → 0.924 | 0.05% |
+| More benign, √ weights, 800 trees | 0.934 → 0.942 | 0.05% |
+
+**What the test set showed.** A first run with no class weights and tuned
+weights reached 0.06% false positives but *lost botnet entirely* (recall 0):
+the few botnet examples were swamped, and a weight tuned on validation
+silenced the class. That run was rejected, which led to the √ weights and the
+0.2 floor. In the next run, decision weights tuned on the validation-stage
+model made the refitted model *worse* (0.817 vs 0.853 with argmax): refitting
+on the latest part of each run shifts its probabilities, and no held-out data
+remains to re-tune them. Decision tuning is therefore opt-in and the bundle
+decides by argmax.
+
+**Result** (test set, 652,904 flows):
+
+| | 2026.10.03 (default) | 2026.10.04 (candidate) |
+|---|---:|---:|
+| Macro-F1 | 0.828 | **0.853** |
+| Accuracy | 99.48% | **99.56%** |
+| Attack detection | **99.27%** | 98.72% |
+| False positives | 0.20% | **0.11%** |
+| Port scan precision / recall | 0.24 / 0.88 | 0.33 / 0.87 |
+| Web attack precision / recall | 0.79 / 0.97 | 0.86 / 0.95 |
+| Botnet precision / recall | 0.42 / **0.92** | **0.52** / 0.75 |
+| Calibration error | – | 0.003 |
+
+**Release gate.** Before the second run's results were seen, the promotion
+rule was fixed as: fewer false positives *and* no class losing more than 10
+points of recall. The candidate meets the first and fails the second (botnet
+recall −17 points). It is therefore committed as an **opt-in**
+(`MODEL_BUNDLE=models/sentinel-flow/2026.10.04`) and 2026.10.03 stays the
+default. For an analyst team, the candidate trades some botnet sensitivity
+(an alert is still raised as long as part of a botnet's flows is caught) for
+roughly half the false alarms.
+
+**Ablation.** Without the TCP initial window sizes, validation macro-F1 drops
+from 0.944 to 0.920 and test macro-F1 from 0.767 to 0.749 (validation-stage
+models). The features carry real signal in this dataset. Whether that signal
+transfers to other networks remains the main open question; they stay in the
+model, and the risk stays documented.
+
+**Honesty note.** The test set was consulted three times during this
+iteration (the rejected run, the run that revealed the decision-weight
+problem, and the final run), so its figures for 2026.10.04 are slightly
+optimistic. A cross-dataset evaluation (e.g. CIC-IDS2018 or CIC-DDoS2019,
+which use the same CICFlowMeter features) would be the clean next check.
+
+## 9. Reproducing
 
 ```bash
 # CSVs in data/raw/cic-ids2017/MachineLearningCVE/ (data/README.md)
 pip install -r ml/requirements.txt
-PYTHONPATH=ml python -m sentinel_ml train     # ~6 min on 4 cores, seed 42
+PYTHONPATH=ml python -m sentinel_ml train     # ~15 min on 4 cores, seed 42
 ```
 
 The run writes the bundle to `models/sentinel-flow/<version>/` and the report

@@ -139,6 +139,9 @@ services:
     environment:
       REDIS_URL: redis://redis:6379/0
       ENGINE_SCENARIO: ${ENGINE_SCENARIO:-normal}
+      # Default model; models/sentinel-flow/2026.10.04 is the opt-in candidate
+      # (fewer false positives, lower botnet recall: docs/ML_METHODOLOGY.md).
+      MODEL_BUNDLE: ${MODEL_BUNDLE:-models/sentinel-flow/2026.10.03}
     depends_on:
       redis:
         condition: service_healthy

@@ -25,7 +25,8 @@ the tests validate the engine's output against it.
 | PCAP replay | `python -m sentinel_engine run --source pcap --pcap capture.pcap --speed 2` | Timestamps are shifted to "now" unless `--no-retime`. |
 | Live capture | `sudo python -m sentinel_engine run --source live --interface eth0 [--filter "tcp or udp"]` | Read-only sniffing; needs `CAP_NET_RAW`. Run it on the host whose traffic you want to see, with `REDIS_URL` pointing at the stack's Redis. |
 
-Environment: `REDIS_URL`, `MODEL_BUNDLE` (default `models/sentinel-flow/2026.10.03`),
+Environment: `REDIS_URL`, `MODEL_BUNDLE` (default `models/sentinel-flow/2026.10.03`; the
+opt-in candidate is `models/sentinel-flow/2026.10.04`),
 `FLOW_PROFILES` (default `data/samples/flow_profiles.csv`).
 
 With Docker Compose the engine runs in the `engine` service:

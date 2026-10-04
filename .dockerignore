@@ -6,5 +6,6 @@
 !engine/requirements.txt
 !engine/sentinel_engine
 !models/sentinel-flow/2026.10.03
+!models/sentinel-flow/2026.10.04
 !data/samples/flow_profiles.csv
 **/__pycache__

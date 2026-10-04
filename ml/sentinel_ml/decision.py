@@ -4,9 +4,10 @@ Plain argmax treats a 51% "botnet" like a 99% one. In a SOC, where benign
 traffic outnumbers each rare attack class by 1,000:1, that floods analysts
 with false positives. The bundle therefore stores one weight per class, tuned
 on a validation set with the real class mix; the label is
-argmax(probability x weight). Weights only ever go down from 1 (the benign
-weight stays 1), so tuning can make the model more conservative about an
-attack class but never more eager than argmax.
+argmax(probability x weight). Weights stay between 0.2 and 1 (the benign
+weight stays 1): tuning can make the model up to five times more demanding
+about an attack class, never more eager than argmax, and never so strict that
+a class whose validation sample is unrepresentative is silenced altogether.
 """
 
 from itertools import pairwise
@@ -14,7 +15,7 @@ from itertools import pairwise
 import numpy as np
 from sklearn.metrics import f1_score
 
-GRID = np.geomspace(0.01, 1.0, 41)
+GRID = np.geomspace(0.2, 1.0, 21)
 BENIGN_INDEX = 0
 
 
