@@ -284,151 +284,232 @@ async def set_assignee(
 # --- Ingestion ----------------------------------------------------------------
 
 
+def _new_alert(d: Detection, severity: Severity, explanation: list[dict]) -> Alert:
+    return Alert(
+        first_seen_at=d.ts,
+        last_seen_at=d.ts,
+        attack_type=d.label,
+        source_ip=d.src_ip,
+        destination_ip=d.dst_ip,
+        destination_port=d.dst_port,
+        protocol=d.protocol,
+        confidence=d.confidence,
+        risk_score=d.risk_score,
+        severity=severity,
+        status=S.NEW,
+        description=describe(d.label, d.confidence, d.dst_ip, d.dst_port),
+        recommended_action=recommended_action(d.label, severity, d.src_ip, d.dst_ip),
+        detection_count=1,
+        peak_packets_per_sec=d.packets_per_sec,
+        peak_bytes_per_sec=d.bytes_per_sec,
+        explanation=explanation,
+        risk_components=d.risk_components,
+        model_version=d.model_version,
+    )
+
+
+def _absorb(
+    session: AsyncSession,
+    alert: Alert,
+    d: Detection,
+    severity: Severity,
+    explanation: list[dict],
+) -> bool:
+    """Fold a detection into an open alert. Returns True if the alert moved
+    to a higher severity band."""
+    escalated = False
+    alert.detection_count += 1
+    alert.first_seen_at = min(alert.first_seen_at, d.ts)
+    alert.last_seen_at = max(alert.last_seen_at, d.ts)
+    alert.peak_packets_per_sec = max(alert.peak_packets_per_sec, d.packets_per_sec)
+    alert.peak_bytes_per_sec = max(alert.peak_bytes_per_sec, d.bytes_per_sec)
+    alert.confidence = max(alert.confidence, d.confidence)
+    if d.risk_score > alert.risk_score:
+        # The highest-risk detection drives the alert's score and explanation.
+        previous = alert.severity
+        escalated = SEVERITY_ORDER.index(severity) > SEVERITY_ORDER.index(previous)
+        alert.risk_score = d.risk_score
+        alert.severity = severity
+        alert.source_ip = d.src_ip
+        # The engine explains only a sample of flood flows; keep the current
+        # explanation when this detection carries none.
+        if explanation:
+            alert.explanation = explanation
+        alert.risk_components = d.risk_components
+        alert.model_version = d.model_version
+        alert.recommended_action = recommended_action(d.label, severity, d.src_ip, d.dst_ip)
+        if escalated:
+            record_audit(
+                session,
+                SYSTEM_ACTOR,
+                "alert.escalated",
+                entity_type="alert",
+                entity_id=alert.id,
+                before={"severity": previous.value},
+                after={"severity": severity.value, "risk_score": d.risk_score},
+            )
+    alert.description = describe(
+        d.label, alert.confidence, alert.destination_ip, alert.destination_port
+    )
+    return escalated
+
+
+def _event_row(stream_id: str | None, d: Detection) -> dict:
+    return {
+        "stream_id": stream_id,
+        "ts": d.ts,
+        # Bulk inserts bypass the ORM's INET conversion; asyncpg takes strings.
+        "src_ip": str(d.src_ip),
+        "dst_ip": str(d.dst_ip),
+        "src_port": d.src_port,
+        "dst_port": d.dst_port,
+        "protocol": d.protocol,
+        "packet_count": d.packet_count,
+        "byte_count": d.byte_count,
+        "duration": d.duration,
+        "packets_per_sec": d.packets_per_sec,
+        "bytes_per_sec": d.bytes_per_sec,
+        "features": d.features,
+        "source": d.source,
+    }
+
+
+async def ingest_batch(
+    session: AsyncSession,
+    items: list[tuple[str | None, Detection]],
+    config: DetectionConfig,
+) -> list[IngestResult]:
+    """Store detections and fold attacks into alerts. The caller commits.
+
+    Detections correlate by (attack type, destination): an open alert for the
+    same pair seen within the aggregation window absorbs the detection, so a
+    flood raises one alert instead of thousands. Events and predictions are
+    inserted in bulk, and each (type, destination) group takes its lock and
+    loads its alert once per batch, which keeps a flood cheap to ingest.
+    Returns one result per item, in order.
+    """
+    results: list[IngestResult | None] = [None] * len(items)
+    stream_ids = [sid for sid, _ in items if sid is not None]
+    existing: dict[str, int] = {}
+    if stream_ids:
+        rows = await session.execute(
+            select(NetworkEvent.stream_id, NetworkEvent.id).where(
+                NetworkEvent.stream_id.in_(stream_ids)
+            )
+        )
+        existing = {sid: eid for sid, eid in rows.all() if sid is not None}
+
+    fresh: list[int] = []
+    seen_in_batch: set[str] = set()
+    for index, (sid, _) in enumerate(items):
+        if sid is not None and (sid in existing or sid in seen_in_batch):
+            continue
+        if sid is not None:
+            seen_in_batch.add(sid)
+        fresh.append(index)
+
+    event_ids: dict[int, int] = {}
+    if fresh:
+        ids = await session.scalars(
+            insert(NetworkEvent).returning(NetworkEvent.id, sort_by_parameter_order=True),
+            [_event_row(*items[i]) for i in fresh],
+        )
+        event_ids = dict(zip(fresh, ids.all(), strict=True))
+        await session.execute(
+            insert(Prediction),
+            [
+                {
+                    "event_id": event_ids[i],
+                    "model_version": items[i][1].model_version,
+                    "label": items[i][1].label,
+                    "confidence": items[i][1].confidence,
+                    "class_probs": items[i][1].class_probs,
+                    "explanation": [e.model_dump() for e in items[i][1].explanation],
+                    "risk_score": items[i][1].risk_score,
+                    "risk_components": items[i][1].risk_components,
+                    "severity": severity_for(items[i][1].risk_score),
+                }
+                for i in fresh
+            ],
+        )
+    by_stream = {items[i][0]: event_ids[i] for i in fresh if items[i][0] is not None}
+    for index, (sid, _) in enumerate(items):
+        if index not in event_ids:
+            event_id = existing.get(sid) or by_stream[sid]  # type: ignore[index]
+            results[index] = IngestResult(event_id=event_id, duplicate=True)
+
+    groups: dict[tuple[str, str], list[int]] = {}
+    for index in fresh:
+        d = items[index][1]
+        if d.label == BENIGN_LABEL or d.risk_score < config.alert_min_risk:
+            results[index] = IngestResult(event_id=event_ids[index])
+        else:
+            groups.setdefault((d.label, str(d.dst_ip)), []).append(index)
+
+    window = timedelta(minutes=config.aggregation_window_minutes)
+    links: list[dict] = []
+    changed: dict[int, tuple[Alert, bool]] = {}  # alert id -> (alert, created in batch)
+    # Sorted lock order keeps concurrent consumers from deadlocking.
+    for label, dst in sorted(groups):
+        indices = groups[(label, dst)]
+        lock_key = f"alert:{label}:{dst}"
+        await session.execute(select(func.pg_advisory_xact_lock(func.hashtext(lock_key))))
+        first = items[indices[0]][1]
+        alert = await session.scalar(
+            select(Alert)
+            .where(
+                Alert.attack_type == label,
+                Alert.destination_ip == first.dst_ip,
+                Alert.status.in_(OPEN_ALERT_STATUSES),
+                Alert.last_seen_at >= min(items[i][1].ts for i in indices) - window,
+            )
+            .order_by(Alert.last_seen_at.desc())
+            .limit(1)
+            .with_for_update()
+        )
+        for index in indices:
+            d = items[index][1]
+            severity = severity_for(d.risk_score)
+            explanation = [e.model_dump() for e in d.explanation]
+            created = escalated = False
+            if alert is None or alert.last_seen_at < d.ts - window:
+                alert = _new_alert(d, severity, explanation)
+                session.add(alert)
+                await session.flush()
+                record_audit(
+                    session,
+                    SYSTEM_ACTOR,
+                    "alert.created",
+                    entity_type="alert",
+                    entity_id=alert.id,
+                    after={"severity": severity.value, "risk_score": d.risk_score},
+                )
+                created = True
+                changed[alert.id] = (alert, True)
+            else:
+                escalated = _absorb(session, alert, d, severity, explanation)
+                if escalated and alert.id not in changed:
+                    changed[alert.id] = (alert, False)
+            links.append({"alert_id": alert.id, "event_id": event_ids[index]})
+            results[index] = IngestResult(
+                event_id=event_ids[index], alert=alert, created=created, escalated=escalated
+            )
+
+    if links:
+        await session.execute(insert(alert_events), links)
+    for alert, created in changed.values():
+        # Same transaction as the alert change: the delivery exists if and only
+        # if the change commits (transactional outbox). One delivery per band.
+        await enqueue_for_alert(session, alert, created=created)
+    return [r for r in results if r is not None]
+
+
 async def ingest_detection(
     session: AsyncSession,
     detection: Detection,
     config: DetectionConfig,
     stream_id: str | None = None,
 ) -> IngestResult:
-    """Store one detection and fold it into an alert when it is an attack.
-
-    Detections correlate by (attack type, destination): an open alert for the
-    same pair seen within the aggregation window absorbs the detection, so a
-    flood raises one alert instead of thousands. The caller commits.
-    """
-    if stream_id is not None:
-        existing = await session.scalar(
-            select(NetworkEvent.id).where(NetworkEvent.stream_id == stream_id)
-        )
-        if existing is not None:
-            return IngestResult(event_id=existing, duplicate=True)
-
-    d = detection
-    event = NetworkEvent(
-        stream_id=stream_id,
-        ts=d.ts,
-        src_ip=d.src_ip,
-        dst_ip=d.dst_ip,
-        src_port=d.src_port,
-        dst_port=d.dst_port,
-        protocol=d.protocol,
-        packet_count=d.packet_count,
-        byte_count=d.byte_count,
-        duration=d.duration,
-        packets_per_sec=d.packets_per_sec,
-        bytes_per_sec=d.bytes_per_sec,
-        features=d.features,
-        source=d.source,
-    )
-    session.add(event)
-    await session.flush()
-    severity = severity_for(d.risk_score)
-    explanation = [item.model_dump() for item in d.explanation]
-    session.add(
-        Prediction(
-            event_id=event.id,
-            model_version=d.model_version,
-            label=d.label,
-            confidence=d.confidence,
-            class_probs=d.class_probs,
-            explanation=explanation,
-            risk_score=d.risk_score,
-            risk_components=d.risk_components,
-            severity=severity,
-        )
-    )
-    if d.label == BENIGN_LABEL or d.risk_score < config.alert_min_risk:
-        return IngestResult(event_id=event.id)
-
-    # Serialise correlation for this (type, destination) across worker processes.
-    lock_key = f"alert:{d.label}:{d.dst_ip}"
-    await session.execute(select(func.pg_advisory_xact_lock(func.hashtext(lock_key))))
-    window_start = d.ts - timedelta(minutes=config.aggregation_window_minutes)
-    alert = await session.scalar(
-        select(Alert)
-        .where(
-            Alert.attack_type == d.label,
-            Alert.destination_ip == d.dst_ip,
-            Alert.status.in_(OPEN_ALERT_STATUSES),
-            Alert.last_seen_at >= window_start,
-        )
-        .order_by(Alert.last_seen_at.desc())
-        .limit(1)
-        .with_for_update()
-    )
-
-    created = alert is None
-    escalated = False
-    if alert is None:
-        alert = Alert(
-            first_seen_at=d.ts,
-            last_seen_at=d.ts,
-            attack_type=d.label,
-            source_ip=d.src_ip,
-            destination_ip=d.dst_ip,
-            destination_port=d.dst_port,
-            protocol=d.protocol,
-            confidence=d.confidence,
-            risk_score=d.risk_score,
-            severity=severity,
-            status=S.NEW,
-            description=describe(d.label, d.confidence, d.dst_ip, d.dst_port),
-            recommended_action=recommended_action(d.label, severity, d.src_ip, d.dst_ip),
-            detection_count=1,
-            peak_packets_per_sec=d.packets_per_sec,
-            peak_bytes_per_sec=d.bytes_per_sec,
-            explanation=explanation,
-            risk_components=d.risk_components,
-            model_version=d.model_version,
-        )
-        session.add(alert)
-        await session.flush()
-        record_audit(
-            session,
-            SYSTEM_ACTOR,
-            "alert.created",
-            entity_type="alert",
-            entity_id=alert.id,
-            after={"severity": severity.value, "risk_score": d.risk_score},
-        )
-    else:
-        alert.detection_count += 1
-        alert.first_seen_at = min(alert.first_seen_at, d.ts)
-        alert.last_seen_at = max(alert.last_seen_at, d.ts)
-        alert.peak_packets_per_sec = max(alert.peak_packets_per_sec, d.packets_per_sec)
-        alert.peak_bytes_per_sec = max(alert.peak_bytes_per_sec, d.bytes_per_sec)
-        alert.confidence = max(alert.confidence, d.confidence)
-        if d.risk_score > alert.risk_score:
-            # The highest-risk detection drives the alert's score and explanation.
-            previous = alert.severity
-            escalated = SEVERITY_ORDER.index(severity) > SEVERITY_ORDER.index(previous)
-            alert.risk_score = d.risk_score
-            alert.severity = severity
-            alert.source_ip = d.src_ip
-            # The engine explains only a sample of flood flows; keep the
-            # current explanation when this detection carries none.
-            if explanation:
-                alert.explanation = explanation
-            alert.risk_components = d.risk_components
-            alert.model_version = d.model_version
-            alert.recommended_action = recommended_action(d.label, severity, d.src_ip, d.dst_ip)
-            if escalated:
-                record_audit(
-                    session,
-                    SYSTEM_ACTOR,
-                    "alert.escalated",
-                    entity_type="alert",
-                    entity_id=alert.id,
-                    before={"severity": previous.value},
-                    after={"severity": severity.value, "risk_score": d.risk_score},
-                )
-        alert.description = describe(
-            d.label, alert.confidence, alert.destination_ip, alert.destination_port
-        )
-
-    await session.execute(insert(alert_events).values(alert_id=alert.id, event_id=event.id))
-    if created or escalated:
-        # Same transaction as the alert change: the delivery exists if and only
-        # if the change commits (transactional outbox).
-        await enqueue_for_alert(session, alert, created=created)
-    return IngestResult(event_id=event.id, alert=alert, created=created, escalated=escalated)
+    """Store one detection (see ingest_batch). The caller commits."""
+    (result,) = await ingest_batch(session, [(stream_id, detection)], config)
+    return result
