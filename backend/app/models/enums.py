@@ -47,3 +47,22 @@ class EventSource(StrEnum):
     LIVE = "live"
     PCAP = "pcap"
     SIM = "sim"
+
+
+class ChannelKind(StrEnum):
+    EMAIL = "email"
+    SLACK = "slack"
+    WEBHOOK = "webhook"
+
+
+class NotificationEvent(StrEnum):
+    ALERT_CREATED = "alert.created"
+    ALERT_ESCALATED = "alert.escalated"
+    TEST = "test"
+
+
+class DeliveryStatus(StrEnum):
+    PENDING = "pending"
+    SENT = "sent"
+    FAILED = "failed"
+    SUPPRESSED = "suppressed"

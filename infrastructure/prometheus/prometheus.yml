@@ -1,0 +1,12 @@
+# Optional monitoring profile: docker compose --profile monitoring up -d
+global:
+  scrape_interval: 15s
+  evaluation_interval: 15s
+
+scrape_configs:
+  # API request metrics plus pipeline gauges read from PostgreSQL and Redis
+  # (open alerts, flows, detection-stream backlog, notification deliveries).
+  - job_name: argus-api
+    metrics_path: /metrics
+    static_configs:
+      - targets: ["backend:8000"]

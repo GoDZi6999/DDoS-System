@@ -1,0 +1,109 @@
+import math
+
+import pytest
+
+from argus_engine.flows import FlowTable
+from argus_engine.packets import Packet
+
+C, S = "10.0.0.1", "10.0.0.2"  # client, server
+
+
+def tcp(ts, src, dst, sport, dport, payload=0, flags="A", window=None):
+    return Packet(ts, src, dst, sport, dport, "tcp", payload, flags, window)
+
+
+def http_exchange(t0=100.0):
+    """Handshake, request, two-part response, FIN in both directions, final ACK."""
+    return [
+        tcp(t0 + 0.000, C, S, 40000, 80, 0, "S", 29200),
+        tcp(t0 + 0.010, S, C, 80, 40000, 0, "SA", 28960),
+        tcp(t0 + 0.020, C, S, 40000, 80, 0, "A"),
+        tcp(t0 + 0.030, C, S, 40000, 80, 300, "PA"),
+        tcp(t0 + 0.050, S, C, 80, 40000, 1000, "A"),
+        tcp(t0 + 0.060, S, C, 80, 40000, 500, "PA"),
+        tcp(t0 + 0.070, C, S, 40000, 80, 0, "FA"),
+        tcp(t0 + 0.080, S, C, 80, 40000, 0, "FA"),
+        tcp(t0 + 0.090, C, S, 40000, 80, 0, "A"),
+    ]
+
+
+def build(packets, sweep_at):
+    table = FlowTable()
+    for p in packets:
+        table.add(p)
+    return table, table.sweep(sweep_at)
+
+
+def test_tcp_exchange_produces_one_bidirectional_flow_with_cic_style_features():
+    table, records = build(http_exchange(), sweep_at=100.7)
+
+    assert len(records) == 1 and len(table) == 0
+    r = records[0]
+    f = r["features"]
+    assert (r["src_ip"], r["dst_ip"], r["src_port"], r["dst_port"]) == (C, S, 40000, 80)
+    assert (r["packet_count"], r["byte_count"]) == (9, 1800)
+    assert f["flow_duration_s"] == pytest.approx(0.09)
+    assert (f["fwd_packets"], f["bwd_packets"]) == (5, 4)
+    assert (f["fwd_bytes"], f["bwd_bytes"]) == (300, 1500)
+    assert (f["fwd_pkt_len_max"], f["fwd_pkt_len_min"], f["fwd_pkt_len_mean"]) == (300, 0, 60)
+    assert f["bwd_pkt_len_mean"] == 375
+    assert f["bwd_pkt_len_std"] == pytest.approx(478.7135, rel=1e-4)  # sample std
+    assert f["flow_iat_mean"] == pytest.approx(0.01125)
+    assert f["flow_iat_max"] == pytest.approx(0.02)
+    assert f["fwd_iat_total"] == pytest.approx(0.09)
+    assert f["bwd_iat_total"] == pytest.approx(0.07)
+    assert (f["syn_flag_count"], f["fin_flag_count"], f["rst_flag_count"]) == (2, 2, 0)
+    assert (f["psh_flag_count"], f["fwd_psh_flags"], f["ack_flag_count"]) == (2, 1, 8)
+    assert (f["init_win_bytes_fwd"], f["init_win_bytes_bwd"]) == (29200, 28960)
+    assert f["down_up_ratio"] == 0  # 4 // 5, an integer like CICFlowMeter
+    assert f["active_mean"] == f["idle_mean"] == 0
+
+
+def test_finished_flow_waits_for_the_trailing_ack():
+    packets = http_exchange()
+    table, early = build(packets, sweep_at=100.1)  # FINs seen 0.02 s ago
+
+    assert early == [] and len(table) == 1
+
+
+def test_rst_closes_and_idle_flows_time_out():
+    table = FlowTable(idle_timeout=5.0)
+    table.add(tcp(0.0, C, S, 1, 2, 0, "S", 1024))
+    table.add(tcp(0.001, S, C, 2, 1, 0, "RA", 0))
+    table.add(Packet(0.0, C, "10.0.0.9", 5353, 53, "udp", 40))
+
+    first = table.sweep(1.0)  # RST flow done, UDP still open
+    later = table.sweep(6.0)
+
+    assert [r["dst_port"] for r in first] == [2]
+    assert first[0]["features"]["init_win_bytes_bwd"] == 0
+    assert [r["protocol"] for r in later] == ["udp"]
+    assert later[0]["features"]["init_win_bytes_fwd"] == -1  # no TCP window
+
+
+def test_long_silence_splits_active_and_idle_periods():
+    packets = [
+        tcp(0.0, C, S, 1, 2, 10),
+        tcp(1.0, S, C, 2, 1, 10),
+        tcp(8.0, C, S, 1, 2, 10),  # 7 s gap > activity gap
+        tcp(9.0, S, C, 2, 1, 10),
+    ]
+    table = FlowTable(idle_timeout=30)
+    for p in packets:
+        table.add(p)
+
+    f = table.flush()[0]["features"]
+
+    assert f["idle_mean"] == pytest.approx(7.0)
+    assert f["active_mean"] == pytest.approx(1.0)
+
+
+def test_active_timeout_cuts_endless_flows():
+    table = FlowTable(idle_timeout=5, active_timeout=10)
+    for i in range(12):
+        table.add(tcp(float(i), C, S, 1, 2, 1))
+
+    records = table.sweep(11.5)
+
+    assert len(records) == 1
+    assert math.isclose(records[0]["features"]["flow_duration_s"], 11.0)

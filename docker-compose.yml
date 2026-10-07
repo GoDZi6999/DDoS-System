@@ -1,4 +1,4 @@
-# SentinelAI development stack:  docker compose up --build
+# Argus development stack:  docker compose up --build
 #
 # Every variable has a development default, so a fresh clone starts without a
 # .env file. Copy .env.example to .env to override them, and set real secrets
@@ -8,28 +8,34 @@
 # INITIAL_ADMIN_PASSWORD is unset, the generated password is printed once:
 #   docker compose logs migrate
 #
-# Services added in later phases: ml-engine and collector (Phase 5),
-# worker (Phase 7), simulator on an isolated lab network (Phase 5).
+# The engine runs simulated lab traffic by default (nothing is sent on any
+# network). ENGINE_SCENARIO=demo cycles through attacks; see engine/README.md
+# for PCAP replay and live capture.
+#
+# Alert notifications (email, Slack, webhooks) are configured in the dashboard
+# under Notifications. To try email locally, start the bundled mail catcher:
+#   COMPOSE_PROFILES=mail SMTP_HOST=mailpit SMTP_PORT=1025 SMTP_SECURITY=none \
+#     docker compose up -d        # caught mail: http://localhost:8025
 
-name: sentinelai
+name: argus
 
 x-backend: &backend
   build: ./backend
-  image: sentinelai-backend:latest
+  image: argus-backend:latest
   restart: unless-stopped
 
-x-app-database-url: &app-database-url postgresql+asyncpg://${APP_DB_USER:-sentinel_app}:${APP_DB_PASSWORD:-sentinel_app}@db:5432/${POSTGRES_DB:-sentinel}
+x-app-database-url: &app-database-url postgresql+asyncpg://${APP_DB_USER:-argus_app}:${APP_DB_PASSWORD:-argus_app}@db:5432/${POSTGRES_DB:-argus}
 
 services:
   db:
     image: postgres:16-alpine
     environment:
-      POSTGRES_USER: ${POSTGRES_USER:-sentinel}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-sentinel}
-      POSTGRES_DB: ${POSTGRES_DB:-sentinel}
+      POSTGRES_USER: ${POSTGRES_USER:-argus}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-argus}
+      POSTGRES_DB: ${POSTGRES_DB:-argus}
       # Least-privilege role for the API and alert engine (created on first init).
-      APP_DB_USER: ${APP_DB_USER:-sentinel_app}
-      APP_DB_PASSWORD: ${APP_DB_PASSWORD:-sentinel_app}
+      APP_DB_USER: ${APP_DB_USER:-argus_app}
+      APP_DB_PASSWORD: ${APP_DB_PASSWORD:-argus_app}
     volumes:
       - pgdata:/var/lib/postgresql/data
       - ./infrastructure/db/init:/docker-entrypoint-initdb.d:ro
@@ -59,7 +65,7 @@ services:
     <<: *backend
     command: ["sh", "-c", "alembic upgrade head && python -m app.cli bootstrap"]
     environment:
-      DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER:-sentinel}:${POSTGRES_PASSWORD:-sentinel}@db:5432/${POSTGRES_DB:-sentinel}
+      DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER:-argus}:${POSTGRES_PASSWORD:-argus}@db:5432/${POSTGRES_DB:-argus}
       INITIAL_ADMIN_USERNAME: ${INITIAL_ADMIN_USERNAME:-admin}
       INITIAL_ADMIN_PASSWORD: ${INITIAL_ADMIN_PASSWORD:-}
     depends_on:
@@ -75,6 +81,14 @@ services:
       DATABASE_URL: *app-database-url
       REDIS_URL: redis://redis:6379/0
       JWT_SECRET: ${JWT_SECRET:-}
+      METRICS_ENABLED: ${METRICS_ENABLED:-true}
+      # Links in test notifications; the channel-URL check on save.
+      DASHBOARD_URL: ${DASHBOARD_URL:-http://localhost:3000}
+      NOTIFY_ALLOW_PRIVATE_TARGETS: ${NOTIFY_ALLOW_PRIVATE_TARGETS:-false}
+      # Trust X-Forwarded-For only from the dashboard server (its fixed
+      # address below), so per-IP login throttling and audit entries see the
+      # browser's address instead of the frontend container's.
+      FORWARDED_ALLOW_IPS: 172.28.0.10
     depends_on:
       migrate:
         condition: service_completed_successfully
@@ -101,6 +115,8 @@ services:
     environment:
       DATABASE_URL: *app-database-url
       REDIS_URL: redis://redis:6379/0
+      # The alert engine writes notification payloads, including the alert link.
+      DASHBOARD_URL: ${DASHBOARD_URL:-http://localhost:3000}
     depends_on:
       migrate:
         condition: service_completed_successfully
@@ -119,31 +135,150 @@ services:
       start_period: 15s
     networks: [corenet]
 
+  # Real-time engine: traffic -> flows -> ML + rules -> risk -> detections.
+  engine:
+    build:
+      context: .
+      dockerfile: engine/Dockerfile
+    image: argus-engine:latest
+    environment:
+      REDIS_URL: redis://redis:6379/0
+      ENGINE_SCENARIO: ${ENGINE_SCENARIO:-normal}
+      # Default model; models/argus-flow/2026.10.04 is the opt-in candidate
+      # (fewer false positives, lower botnet recall: docs/ML_METHODOLOGY.md).
+      MODEL_BUNDLE: ${MODEL_BUNDLE:-models/argus-flow/2026.10.03}
+    depends_on:
+      redis:
+        condition: service_healthy
+      alert-engine:
+        condition: service_healthy
+    healthcheck:
+      test:
+        - CMD
+        - python
+        - -c
+        - "import os, sys, time; sys.exit(time.time() - os.path.getmtime('/tmp/argus-engine.heartbeat') > 30)"
+      interval: 10s
+      timeout: 3s
+      retries: 3
+      start_period: 30s
+    networks: [corenet]
+    restart: unless-stopped
+
+  # Sends queued alert notifications (with retries) and applies data retention.
+  notifier:
+    <<: *backend
+    command: ["python", "-m", "app.workers.notifier"]
+    environment:
+      DATABASE_URL: *app-database-url
+      DASHBOARD_URL: ${DASHBOARD_URL:-http://localhost:3000}
+      SMTP_HOST: ${SMTP_HOST:-}
+      SMTP_PORT: ${SMTP_PORT:-587}
+      SMTP_SECURITY: ${SMTP_SECURITY:-starttls}
+      SMTP_USERNAME: ${SMTP_USERNAME:-}
+      SMTP_PASSWORD: ${SMTP_PASSWORD:-}
+      SMTP_FROM: ${SMTP_FROM:-Argus <argus@localhost>}
+      NOTIFY_ALLOW_PRIVATE_TARGETS: ${NOTIFY_ALLOW_PRIVATE_TARGETS:-false}
+      EVENT_RETENTION_DAYS: ${EVENT_RETENTION_DAYS:-14}
+      EVIDENCE_RETENTION_DAYS: ${EVIDENCE_RETENTION_DAYS:-90}
+      DELIVERY_RETENTION_DAYS: ${DELIVERY_RETENTION_DAYS:-30}
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+    healthcheck:
+      test:
+        - CMD
+        - python
+        - -c
+        - "import os, sys, time; sys.exit(time.time() - os.path.getmtime('/tmp/notifier.heartbeat') > 60)"
+      interval: 10s
+      timeout: 3s
+      retries: 3
+      start_period: 15s
+    # corenet for the database; egressnet to reach SMTP relays and webhooks.
+    networks: [corenet, egressnet]
+
+  # Optional local mail catcher (profile "mail"): SMTP on mailpit:1025, web UI
+  # and API on http://localhost:8025. Nothing it receives leaves the machine.
+  mailpit:
+    image: axllent/mailpit:v1.31
+    profiles: [mail]
+    ports:
+      - "127.0.0.1:${MAILPIT_PORT:-8025}:8025"
+    networks: [egressnet]
+    restart: unless-stopped
+
+  # Optional monitoring (profile "monitoring"): Prometheus scrapes the API's
+  # /metrics; Grafana shows a provisioned Argus dashboard on
+  # http://localhost:3001 (user admin, GRAFANA_ADMIN_PASSWORD).
+  prometheus:
+    image: prom/prometheus:v3.7.0
+    profiles: [monitoring]
+    command: ["--config.file=/etc/prometheus/prometheus.yml", "--storage.tsdb.retention.time=7d"]
+    volumes:
+      - ./infrastructure/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - prometheusdata:/prometheus
+    ports:
+      - "127.0.0.1:${PROMETHEUS_PORT:-9090}:9090"
+    networks: [frontnet]
+    restart: unless-stopped
+
+  grafana:
+    image: grafana/grafana:12.2.0
+    profiles: [monitoring]
+    environment:
+      GF_SECURITY_ADMIN_USER: admin
+      GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_ADMIN_PASSWORD:-change-me-grafana}
+      GF_USERS_ALLOW_SIGN_UP: "false"
+      GF_ANALYTICS_REPORTING_ENABLED: "false"
+      GF_ANALYTICS_CHECK_FOR_UPDATES: "false"
+      GF_DASHBOARDS_DEFAULT_HOME_DASHBOARD_PATH: /var/lib/grafana/dashboards/argus.json
+    volumes:
+      - ./infrastructure/grafana/provisioning:/etc/grafana/provisioning:ro
+      - ./infrastructure/grafana/dashboards:/var/lib/grafana/dashboards:ro
+      - grafanadata:/var/lib/grafana
+    depends_on: [prometheus]
+    ports:
+      - "127.0.0.1:${GRAFANA_PORT:-3001}:3000"
+    networks: [frontnet]
+    restart: unless-stopped
+
   frontend:
     build: ./frontend
     environment:
       API_INTERNAL_URL: http://backend:8000
+      # Set to true when the dashboard is served over HTTPS.
+      COOKIE_SECURE: ${COOKIE_SECURE:-false}
     depends_on:
       backend:
         condition: service_healthy
     ports:
       - "127.0.0.1:${FRONTEND_PORT:-3000}:3000"
     healthcheck:
-      test: ["CMD", "wget", "-q", "--spider", "http://127.0.0.1:3000/"]
+      test: ["CMD", "wget", "-q", "--spider", "http://127.0.0.1:3000/status"]
       interval: 10s
       timeout: 5s
       retries: 6
       start_period: 10s
-    networks: [frontnet]
+    networks:
+      frontnet:
+        ipv4_address: 172.28.0.10
     restart: unless-stopped
 
 networks:
   # Browser-facing tier: frontend and backend.
   frontnet:
+    ipam:
+      config:
+        - subnet: 172.28.0.0/24
   # Data tier: no route to the outside world.
   corenet:
     internal: true
+  # Outbound notifications only (notifier, optional mail catcher).
+  egressnet:
 
 volumes:
   pgdata:
   redisdata:
+  prometheusdata:
+  grafanadata:

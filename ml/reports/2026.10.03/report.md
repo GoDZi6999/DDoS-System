@@ -1,4 +1,4 @@
-# Model report — sentinel-flow 2026.10.03
+# Model report — argus-flow 2026.10.03
 
 Selected model: **xgboost** (by cross-validated macro-F1). Trained 2026-10-03T17:07:15 UTC in 5.9 min, commit `fdebf0c873`.
 

@@ -1,17 +1,18 @@
-# ML pipeline (`sentinel_ml`)
+# ML pipeline (`argus_ml`)
 
-Training, evaluation and inference for SentinelAI's flow classifier.
+Training, evaluation and inference for Argus's flow classifier.
 Methodology and results: [`docs/ML_METHODOLOGY.md`](../docs/ML_METHODOLOGY.md);
 latest report: [`ml/reports/`](reports/).
 
 ```
-sentinel_ml/
+argus_ml/
   features.py    THE feature definition (37 flow statistics, canonical units),
                  shared by training (from_cic) and live inference (from_records)
   data.py        load CIC-IDS2017, map labels, clean, deduplicate, temporal split
   models.py      candidates: logistic regression (baseline), random forest, XGBoost;
                  each a Pipeline that starts with the shared FlowPreprocessor
-  train.py       CV -> fit -> evaluate -> bundle -> report
+  train.py       validate (real class mix) -> select -> refit -> evaluate -> bundle -> report
+  decision.py    optional per-class decision weights; calibration error
   evaluate.py    metrics (per-class P/R/F1, macro-F1, ROC-AUC, PR-AUC, detection
                  rate, false-positive rate, latency) and plots
   explain.py     SHAP explanations per prediction and global importance
@@ -28,12 +29,15 @@ About 20 minutes on 4 cores.
 ```bash
 python -m venv .venv && source .venv/bin/activate
 pip install -r ml/requirements.txt
-PYTHONPATH=ml python -m sentinel_ml train          # from the repo root
+PYTHONPATH=ml python -m argus_ml train          # from the repo root
+# --tune-decisions   bundle tuned per-class decision weights (off by default, see
+#                    docs/ML_METHODOLOGY.md section 8)
+# --no-ablation      skip the run without TCP window features
 ```
 
 Output:
 
-- `models/sentinel-flow/<version>/`: `model.joblib`, `background.joblib`,
+- `models/argus-flow/<version>/`: `model.joblib`, `background.joblib`,
   `feature_config.json`, `model_metadata.json` (not committed; large).
 - `ml/reports/<version>/`: `report.md`, `metrics.json`, confusion matrix and
   feature-importance plots (committed as evidence).
@@ -45,8 +49,8 @@ checksums and refuses bundles built for a different feature list.
 ## Predict
 
 ```bash
-PYTHONPATH=ml python -m sentinel_ml predict \
-  --bundle models/sentinel-flow/<version> \
+PYTHONPATH=ml python -m argus_ml predict \
+  --bundle models/argus-flow/<version> \
   --csv data/raw/cic-ids2017/MachineLearningCVE/Friday-WorkingHours-Afternoon-DDos.pcap_ISCX.csv \
   --limit 5
 # {"summary": "ddos detected — confidence 100.0%", "label": "ddos", "confidence": 1.0,
@@ -56,10 +60,10 @@ PYTHONPATH=ml python -m sentinel_ml predict \
 From Python (what the Phase 5 ML engine will do):
 
 ```python
-from sentinel_ml import features
-from sentinel_ml.inference import Predictor
+from argus_ml import features
+from argus_ml.inference import Predictor
 
-predictor = Predictor.from_bundle("models/sentinel-flow/<version>")
+predictor = Predictor.from_bundle("models/argus-flow/<version>")
 for p in predictor.predict(features.from_records(flow_dicts)):
     print(p.summary(), p.explanation[:3])
 ```

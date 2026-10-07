@@ -4,13 +4,13 @@ requires = ["setuptools>=75"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "sentinel-ml"
+name = "argus-ml"
 version = "0.1.0"
-description = "SentinelAI flow features, training, evaluation and inference"
+description = "Argus flow features, training, evaluation and inference"
 requires-python = ">=3.12"
 
 [tool.setuptools.packages.find]
-include = ["sentinel_ml*"]
+include = ["argus_ml*"]
 
 [tool.ruff]
 line-length = 100
@@ -22,7 +22,7 @@ select = ["E", "W", "F", "I", "B", "UP", "S", "RUF", "NPY"]
 [tool.ruff.lint.per-file-ignores]
 "tests/**" = ["S101"]
 # The report template is made of long Markdown table rows.
-"sentinel_ml/train.py" = ["E501"]
+"argus_ml/train.py" = ["E501"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

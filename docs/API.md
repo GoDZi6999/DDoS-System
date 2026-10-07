@@ -1,4 +1,4 @@
-# SentinelAI API
+# Argus API
 
 Base path `/api/v1`. Interactive documentation (Swagger UI, generated from the
 code) is served at <http://localhost:8000/docs>; its **Authorize** button logs
@@ -53,7 +53,7 @@ is added without being listed.
 | `GET /alerts`, `/alerts/{id}`, `/alerts/{id}/events`, `/events`, `/events/{id}`, `/stats/*` | ✓ | ✓ | ✓ |
 | `POST /alerts/{id}/ack`, `PATCH /alerts/{id}/status`, `POST /alerts/{id}/notes`, `PUT /alerts/{id}/assignee` | | ✓ | ✓ |
 | `GET /config/detection` | | ✓ | ✓ |
-| `PUT /config/detection`, `/users*`, `GET /audit` | | | ✓ |
+| `PUT /config/detection`, `/users*`, `GET /audit`, `/notifications/*` | | | ✓ |
 | `WS /ws` | ✓ | ✓ | ✓ |
 
 ## Alerts
@@ -71,7 +71,7 @@ severity, source IP and explanation; a jump to a higher severity band is
 recorded as `alert.escalated`.
 
 Severity bands: 0–30 LOW, 31–60 MEDIUM, 61–80 HIGH, 81–100 CRITICAL.
-`recommended_action` is advisory text; SentinelAI does not block traffic.
+`recommended_action` is advisory text; Argus does not block traffic.
 
 ### Workflow
 
@@ -133,7 +133,57 @@ Audited actions: `auth.login`, `auth.login_failed`, `auth.locked`,
 `auth.logout`, `auth.password_changed`, `auth.refresh_reuse_detected`,
 `user.created`, `user.updated`, `alert.created`, `alert.escalated`,
 `alert.acknowledged`, `alert.status_changed`, `alert.note_added`,
-`alert.assigned`, `config.updated`.
+`alert.assigned`, `config.updated`, `notification.channel_created`,
+`notification.channel_updated`, `notification.test_sent`, `retention.purged`.
+
+## Notifications
+
+Admins configure where alerts are sent. Each channel has a minimum severity
+and receives a message when an alert first reaches that severity and again
+each time it escalates to a higher band: **at most one message per channel,
+alert and severity band**, however many detections the alert absorbs.
+Beyond `max_per_hour` messages per channel, further deliveries are recorded
+as `suppressed`. Messages are advisory and link to the alert in the dashboard
+(`DASHBOARD_URL`).
+
+| Endpoint | Notes |
+|---|---|
+| `GET /notifications/channels` | All channels; secrets are masked (Slack URL path hidden, webhook query hidden, `secret_set` instead of the secret). Includes the last delivery's time and status. |
+| `POST /notifications/channels` | `{"name", "kind", "min_severity": "HIGH", "max_per_hour": 30, "enabled": true, "config": {...}}` → `201`. |
+| `GET /notifications/channels/{id}` | One channel (masked). |
+| `PATCH /notifications/channels/{id}` | Fields sent are changed. Channels are disabled (`"enabled": false`), not deleted, so the delivery log keeps them. |
+| `POST /notifications/channels/{id}/test` | Queues a test message → `202 {"delivery_id"}`; the outcome appears in the delivery log. |
+| `GET /notifications/deliveries` | Newest first. Filters: `channel_id`, `alert_id`, `status` (repeatable: `pending`, `sent`, `failed`, `suppressed`). |
+
+Channel `config` by `kind`:
+
+| Kind | Config | Notes |
+|---|---|---|
+| `email` | `{"recipients": ["soc@example.com"]}` (1–20) | Sent through the SMTP relay in `SMTP_*` settings. |
+| `slack` | `{"webhook_url": "https://hooks.slack.com/services/…"}` | Slack incoming webhook; message with fields and a link. |
+| `webhook` | `{"url": "https://…", "secret": "16+ chars"}` | JSON POST. Omitting `secret` in a PATCH keeps the stored one; `null` removes it. |
+
+Webhook requests carry `X-Argus-Event` (`alert.created`, `alert.escalated`,
+`test`), `X-Argus-Delivery` (id, stable across retries, so receivers can
+de-duplicate), `X-Argus-Timestamp` and, with a secret,
+`X-Argus-Signature: sha256=<hex>`, the HMAC-SHA256 of
+`"<timestamp>.<raw body>"`. Receivers should verify it with a constant-time
+comparison and reject old timestamps. Body:
+
+```json
+{"delivery_id": 12, "event": "alert.created", "url": "http://localhost:3000/alerts/7",
+ "alert": {"id": 7, "severity": "CRITICAL", "attack_type": "ddos", "description": "DDoS detected — …",
+           "source_ip": "198.51.100.23", "destination_ip": "10.20.0.10", "destination_port": 80,
+           "protocol": "tcp", "risk_score": 93, "confidence": 1.0, "detection_count": 12,
+           "first_seen_at": "2026-10-04T05:53:19+00:00", "recommended_action": "…"}}
+```
+
+Webhook and Slack URLs must be `https` and resolve to public addresses
+(private, loopback and link-local targets are refused) unless
+`NOTIFY_ALLOW_PRIVATE_TARGETS=true`. Redirects are not followed. Failed
+attempts are retried after 30 s, 2 min, 10 min and 30 min (5 attempts);
+`4xx` answers (except 408/425/429), refused recipients and refused targets
+fail at once. The reason is stored in `last_error`.
 
 ## Live updates (WebSocket)
 
@@ -147,6 +197,7 @@ ws.onmessage = (msg) => {
   const event = JSON.parse(msg.data);
   // {type: "auth.ok", user: {...}}  then
   // {type: "alert.new" | "alert.updated", data: <alert list item>}
+  // {type: "traffic.tick", data: {ts, source_id, flows_per_s, packets_per_s, attacks, attacks_per_s, max_risk, active_flows}}
 };
 ws.onclose = (e) => { if (e.code === 4401) { /* refresh the token, reconnect */ } };
 ```
@@ -158,9 +209,12 @@ ws.onclose = (e) => { if (e.code === 4401) { /* refresh the token, reconnect */ 
 
 ## Detection stream (ML engine → alert engine)
 
-Producers (the Phase 5 ML engine; `python -m app.cli demo-detections` for
-testing) append to the Redis stream **`sentinel:detections`**, one entry per
-analysed flow, with a single field `data` containing JSON:
+Producers (the real-time engine in `engine/`; `python -m app.cli demo-detections`
+for testing) append to the Redis stream **`argus:detections`**, one entry per
+analysed flow, with a single field `data` containing JSON. The machine-readable
+contract is [`schemas/detection.schema.json`](schemas/detection.schema.json):
+the backend tests check it matches the model, the engine tests validate their
+output against it.
 
 ```json
 {
@@ -181,6 +235,10 @@ analysed flow, with a single field `data` containing JSON:
 }
 ```
 
+Detection settings changed through `PUT /config/detection` are mirrored to
+the Redis key `argus:config:detection`, where the engine reads its risk
+weights.
+
 Rules (`backend/app/schemas/detection.py`): unknown fields are rejected;
 `protocol` ∈ `tcp|udp|icmp|other`; `source` ∈ `live|pcap|sim`; `label` matches
 `[a-z0-9_]{1,32}` (`benign` never raises alerts); `confidence` 0–1;
@@ -191,7 +249,7 @@ the alert engine.
 Delivery is at-least-once through the consumer group `alert-engine`: an entry
 is acknowledged after its transaction commits; the stream entry id is stored
 with the event so a redelivery is not stored twice; invalid entries are moved
-to `sentinel:detections:dead` with the validation error; entries left pending
+to `argus:detections:dead` with the validation error; entries left pending
 by a crashed consumer are reclaimed after 60 seconds.
 
 ## Operational commands
@@ -202,3 +260,5 @@ by a crashed consumer are reclaimed after 60 seconds.
 | `docker compose exec backend python -m app.cli reset-password <user>` | Account recovery: prints a new generated password, ends the user's sessions, audits the reset. |
 | `docker compose exec alert-engine python -m app.cli demo-detections --count 20` | Publishes synthetic, clearly labelled (`source: sim`, `model_version: synthetic-demo`) detections from documentation IP ranges, to exercise the pipeline before the ML engine exists. |
 | `docker compose exec backend alembic current` | Shows the applied migration. |
+| `docker compose exec backend python -m app.cli purge` | Applies the retention policy now (the notifier also runs it every 6 hours). |
+| `docker compose logs notifier` | Delivery outcomes (ids, channel names and status; no secrets or URLs). |

@@ -5,7 +5,7 @@ publishers, so they are **never committed**. Download them from the official
 pages and place them as shown below; `data/raw/` and `data/processed/` are
 git-ignored.
 
-| Dataset | Role in SentinelAI | Official page |
+| Dataset | Role in Argus | Official page |
 |---|---|---|
 | **CIC-IDS2017** (`MachineLearningCSV.zip`, a few hundred MB) | Primary train/test set: benign, DDoS, PortScan, Bot, DoS | <https://www.unb.ca/cic/datasets/ids-2017.html> |
 | **CIC-DDoS2019** (CSV files; tens of GB in total, a subset of attack files is enough) | Wider DDoS coverage: SYN, UDP, DNS/NTP/LDAP reflection, … | <https://www.unb.ca/cic/datasets/ddos-2019.html> |
@@ -32,7 +32,7 @@ data/
 - CIC CSVs contain `Infinity`/`NaN` in rate columns (`Flow Bytes/s`,
   `Flow Packets/s`), duplicate rows, and column names with leading spaces.
 - Flows from one attack run are near-duplicates, so a random row split inflates
-  scores; SentinelAI splits by time/session instead.
+  scores; Argus splits by time/session instead.
 - CIC-IDS2017 has documented flow-construction and labelling errors
   (Engelen et al., 2021); results are reported with that caveat.
 

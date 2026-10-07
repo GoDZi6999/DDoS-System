@@ -3,10 +3,10 @@ import shutil
 
 import pytest
 
-from sentinel_ml import bundle, data, features, models
-from sentinel_ml.__main__ import main
-from sentinel_ml.explain import Explainer
-from sentinel_ml.inference import Predictor
+from argus_ml import bundle, data, features, models
+from argus_ml.__main__ import main
+from argus_ml.explain import Explainer
+from argus_ml.inference import Predictor
 
 
 def test_training_writes_a_complete_bundle_and_report(trained_bundle):
@@ -23,13 +23,18 @@ def test_training_writes_a_complete_bundle_and_report(trained_bundle):
     assert metadata["algorithm"] in {"logistic_regression", "random_forest", "xgboost"}
     assert set(metadata["candidates"]) == {"logistic_regression", "random_forest", "xgboost"}
     assert metadata["dataset"]["cleaning"]["dropped_exact_duplicates"] == 6
-    assert len(metadata["candidates"]["xgboost"]["cv_scores"]) == 5
+    weights = metadata["decision_weights"]
+    assert set(weights) == set(data.CLASSES) and weights["benign"] == 1.0
+    assert all(0.2 <= w <= 1 for w in weights.values())  # more conservative, never silenced
+    assert metadata["ablation"]["dropped"] == ["init_win_bytes_fwd", "init_win_bytes_bwd"]
+    assert 0 <= metadata["metrics"]["calibration_error"] <= 1
     # Synthetic classes are well separated, so every candidate should learn them.
     assert metadata["metrics"]["macro_f1"] > 0.9
     assert {"confusion_matrix.png", "feature_importance.png", "metrics.json", "report.md"} <= {
         p.name for p in report_dir.iterdir()
     }
-    assert "Model comparison" in (report_dir / "report.md").read_text()
+    report = (report_dir / "report.md").read_text()
+    assert "Model comparison" in report and "Ablation" in report and "Decision weight" in report
 
 
 def test_predictor_labels_and_explains_attacks(trained_bundle, dataset_dir):
@@ -109,3 +114,24 @@ def test_every_candidate_can_be_explained(name, dataset_dir):
 
     assert importance.index[0] in features.FEATURE_NAMES
     assert len(explanations) == 3
+
+
+def test_decision_weights_raise_the_bar_for_unsure_attacks():
+    import numpy as np
+
+    from argus_ml.decision import decide, tune_weights
+
+    # Benign is 0.55-likely for the noisy rows; the botnet-ish rows are real.
+    proba = np.array([[0.45, 0.55], [0.40, 0.60], [0.05, 0.95], [0.02, 0.98]])
+    y = np.array([0, 0, 1, 1])
+    weights = tune_weights(proba, y)
+
+    assert decide(proba).tolist() == [1, 1, 1, 1]  # argmax raises two false alarms
+    assert decide(proba, weights).tolist() == [0, 0, 1, 1]
+    assert weights[0] == 1.0 and weights[1] < 1.0
+
+
+def test_predictor_applies_the_bundled_decision_weights(trained_bundle, dataset_dir):
+    predictor = Predictor.from_bundle(trained_bundle)
+    stored = json.loads((trained_bundle / bundle.METADATA_FILE).read_text())["decision_weights"]
+    assert predictor.weights.tolist() == [stored[c] for c in predictor.bundle.classes]

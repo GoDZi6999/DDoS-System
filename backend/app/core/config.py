@@ -5,7 +5,7 @@ import secrets
 from functools import lru_cache
 from typing import Literal
 
-from pydantic import SecretStr, field_validator, model_validator
+from pydantic import Field, SecretStr, field_validator, model_validator
 from pydantic_settings import BaseSettings
 
 logger = logging.getLogger(__name__)
@@ -16,7 +16,7 @@ class Settings(BaseSettings):
 
     # Defaults point at services on localhost for running outside Docker;
     # docker-compose.yml overrides them with the in-network hostnames.
-    database_url: str = "postgresql+asyncpg://sentinel:sentinel@localhost:5432/sentinel"
+    database_url: str = "postgresql+asyncpg://argus:argus@localhost:5432/argus"
     redis_url: str = "redis://localhost:6379/0"
 
     # HS256 signing key (32+ characters). Required in production; without it a
@@ -34,7 +34,39 @@ class Settings(BaseSettings):
     initial_admin_username: str = "admin"
     initial_admin_password: SecretStr | None = None
 
-    @field_validator("jwt_secret", "initial_admin_password", mode="before")
+    # Prometheus metrics at /metrics (not proxied by the dashboard).
+    metrics_enabled: bool = True
+
+    # Notifications (Phase 7). Email channels need an SMTP relay; without
+    # SMTP_HOST their deliveries fail with a clear error.
+    smtp_host: str | None = None
+    smtp_port: int = 587
+    smtp_security: Literal["starttls", "tls", "none"] = "starttls"
+    smtp_username: str | None = None
+    smtp_password: SecretStr | None = None
+    smtp_from: str = "Argus <argus@localhost>"
+    # Base URL of the dashboard, for links in notifications.
+    dashboard_url: str = "http://localhost:3000"
+    # Webhook and Slack targets must be public HTTPS addresses. Allow private
+    # addresses and plain HTTP only for local testing (e.g. a receiver in Compose).
+    notify_allow_private_targets: bool = False
+
+    # Retention, enforced by the notifier worker. Flows older than
+    # EVENT_RETENTION_DAYS are deleted unless they are evidence for an alert
+    # that is open or was closed within EVIDENCE_RETENTION_DAYS. The audit log
+    # is never purged.
+    event_retention_days: int = Field(14, ge=1)
+    evidence_retention_days: int = Field(90, ge=1)
+    delivery_retention_days: int = Field(30, ge=1)
+
+    @field_validator(
+        "jwt_secret",
+        "initial_admin_password",
+        "smtp_host",
+        "smtp_username",
+        "smtp_password",
+        mode="before",
+    )
     @classmethod
     def _empty_as_unset(cls, value: object) -> object:
         # docker-compose passes unset variables through as empty strings.

@@ -1,133 +1,180 @@
-# SentinelAI
+# Argus
 
 **Real-time AI-powered network threat detection and SOC platform.**
 
-SentinelAI detects and classifies suspicious network traffic in real time and
-raises risk-scored, explainable security alerts that analysts work through a
-SOC-style workflow. It does **not** claim to prevent attacks: mitigation is a
-future, opt-in phase with safeguards.
+Argus classifies network flows in real time with an explainable model,
+scores their risk and raises alerts that analysts work through a SOC-style
+workflow, with notifications and a tamper-resistant audit trail. It
+**detects and alerts; it does not block traffic**. Its recommended actions are
+advisory.
+
+![SOC overview during a simulated DDoS](docs/images/overview.png)
 
 ```
-Live traffic / PCAP replay -> Flow builder -> Feature extraction -> ML engine (RF / XGBoost)
-  -> SHAP explanation + risk score -> Redis -> FastAPI (REST + WebSocket) -> Next.js SOC dashboard
-                                                     |-> PostgreSQL       |-> Email / Slack / webhook
+traffic: simulator | PCAP replay | live capture
+   -> flow builder (CICFlowMeter-style, 37 features) -> XGBoost + SHAP + port-scan rule -> risk score
+   -> Redis stream -> alert engine -> PostgreSQL (events, alerts, audit, notification outbox)
+   -> FastAPI (REST + WebSocket) -> Next.js SOC dashboard (backend-for-frontend)
+   -> notifier -> email / Slack / signed webhooks
 ```
 
-Documentation: [architecture](docs/ARCHITECTURE.md) · [API](docs/API.md) ·
-[security controls](docs/SECURITY.md) · [ML methodology](docs/ML_METHODOLOGY.md) ·
-[datasets](data/README.md).
+## Highlights
 
-**Current model** (XGBoost on CIC-IDS2017, held-out test set of 652,904 flows):
-99.48% accuracy, 99.27% of attack flows detected, 0.20% of benign flows
-flagged, ~1 ms per flow, with a SHAP explanation for every attack. Port scans
-and botnet traffic are the weak spot per flow; see the
-[report](ml/reports/2026.10.03/report.md) for per-class results and caveats.
+- **Model you can check.** XGBoost on CIC-IDS2017, evaluated on a held-out
+  set of 652,904 flows after deduplication and a temporal split: 99.48%
+  accuracy, 99.27% of attack flows detected, 0.20% of benign flows flagged.
+  Every alert carries the SHAP factors behind it. An opt-in candidate model
+  (2026.10.04) halves false positives (0.11%) at some cost in botnet recall.
+  Per-class results, the weak spots and the release gate are in the
+  [ML methodology](docs/ML_METHODOLOGY.md).
+- **Real time.** A flow becomes a committed alert in ~1.7 s. The engine
+  classifies ~10,000 flows/s during a flood; one alert absorbs the flood and
+  escalates with its risk. See [performance](docs/PERFORMANCE.md).
+- **SOC console.** A dark analyst console with a live threat level, event feed
+  and traffic chart; the workflow runs NEW → INVESTIGATING → CONTAINED →
+  RESOLVED (or false positive) with assignment, notes, history, a risk
+  breakdown and a recommended action. Three roles: admin, analyst, viewer.
+- **Notifications that don't flood.** Email, Slack and HMAC-signed webhooks,
+  queued in the same transaction as the alert change, retried with backoff,
+  sent once per alert severity band.
+- **Security built in.** argon2id, short-lived tokens with refresh-token theft
+  detection, a role matrix tested for every endpoint, an audit log PostgreSQL
+  itself keeps append-only, tokens kept out of the browser, SSRF-guarded
+  webhooks. See [security controls](docs/SECURITY.md).
+- **Runs anywhere Docker does.** `docker compose up` gives the whole stack with
+  a safe simulator; an optional profile adds Prometheus and Grafana.
 
-## Status
-
-| Phase | Scope | State |
-|---|---|---|
-| 1 | Architecture | ✅ Done |
-| 2 | Repository skeleton, Docker Compose, CI | ✅ Done |
-| 3 | Backend: auth/RBAC, database, alert engine + workflow, audit log, WebSocket | ✅ Done |
-| 4 | ML pipeline: CIC-IDS2017, LR / RF / XGBoost, evaluation, SHAP, model bundles | ✅ Done |
-| 5 | Real-time engine: Scapy collector, PCAP replay, lab simulator, risk engine | ⏳ Next |
-| 6 | SOC dashboard on the live API | ⏳ |
-| 7 | Notifications and background workers | ⏳ |
-| 8 | Documentation, performance, optional monitoring | ⏳ |
+| | |
+|---|---|
+| ![Alert detail with SHAP explanation](docs/images/alert-detail.png) | ![Sign-in screen](docs/images/login.png) |
 
 ## Quick start
 
 Requires Docker with Compose v2.
 
-```bash
-git clone https://github.com/GoDZi6999/DDoS-System.git
-cd DDoS-System
-docker compose up --build -d --wait
-docker compose logs migrate      # first start: shows the generated admin password
-```
+> **Ran it before the rename?** The project was called SentinelAI until
+> 2026-10-07. The Compose project, database and Redis names changed, so
+> remove the old stack and its data once:
+> `docker compose -p sentinelai down -v`.
 
-Lost the password? `docker compose exec backend python -m app.cli reset-password admin`
-prints a new one (and records the reset in the audit log).
+```bash
+git clone https://github.com/GoDZi6999/DDoS-System.git && cd DDoS-System
+docker compose up --build -d --wait
+docker compose logs migrate      # first start: the generated admin password, shown once
+```
 
 | URL | What |
 |---|---|
-| <http://localhost:3000> | Dashboard (until Phase 6: stack status page) |
-| <http://localhost:8000/docs> | API documentation; **Authorize** with `admin` and the password above |
-| <http://localhost:8000/health/ready> | Readiness of PostgreSQL and Redis |
+| <http://localhost:3000> | SOC dashboard; sign in as `admin` |
+| <http://localhost:3000/status> | Public status page (no login) |
+| <http://localhost:8000/docs> | API documentation (**Authorize** with the same account) |
 
-Until the real-time engine (Phase 5) exists, you can push clearly labelled
-synthetic detections through the real pipeline and watch an alert appear in
-`GET /api/v1/alerts`:
+Then simulate an attack and watch it arrive on the dashboard:
 
 ```bash
-docker compose exec alert-engine python -m app.cli demo-detections --count 20
+docker compose exec engine python -m argus_engine inject --scenario ddos --duration 30
 ```
 
-Check the whole stack with `ADMIN_PASSWORD=… ./scripts/smoke_test.sh`. Stop it
-with `docker compose down` (add `-v` to delete the database volume as well).
+The [demo walkthrough](docs/DEMO.md) covers the rest: investigating an
+alert, notifications, roles, monitoring and replaying your own PCAP. Lost the
+password? Run `docker compose exec backend python -m app.cli reset-password admin`.
 
-> Upgrading from Phase 2: run `docker compose down -v` once. The database role
-> used by the API is created only when the volume is first initialised.
+**Optional profiles**
 
-### Configuration
+```bash
+COMPOSE_PROFILES=mail SMTP_HOST=mailpit SMTP_PORT=1025 SMTP_SECURITY=none docker compose up -d --wait
+#   catches alert emails locally: http://localhost:8025
+COMPOSE_PROFILES=monitoring docker compose up -d --wait
+#   Prometheus http://localhost:9090, Grafana http://localhost:3001
+```
 
-Every setting has a development default, so no `.env` file is needed to start.
-To set an admin password, a JWT signing key, database passwords or ports:
-`cp .env.example .env` and edit it.
+**Configuration.** Every setting has a development default, so no `.env` is
+needed to start. For anything shared, `cp .env.example .env`, then set an
+admin password, `JWT_SECRET`, database passwords, SMTP settings and
+`COOKIE_SECURE=true`. Put a TLS reverse proxy in front (see
+[security](docs/SECURITY.md)).
 
-## Development
+## Documentation
 
-- Backend (FastAPI, Python 3.11+): see [`backend/README.md`](backend/README.md)
-- Frontend (Next.js 16, Tailwind 4): see [`frontend/README.md`](frontend/README.md)
-- CI (GitHub Actions) runs backend lint + tests (against real PostgreSQL and
-  Redis), frontend lint + build + a production dependency audit, then builds
-  the Compose stack and runs the authenticated smoke test.
+| Document | Contents |
+|---|---|
+| [Demo walkthrough](docs/DEMO.md) | Ten-minute tour from a fresh clone |
+| [Architecture](docs/ARCHITECTURE.md) | Components, data flow, schema, decisions, threat model |
+| [API](docs/API.md) | REST and WebSocket reference, roles, workflow, notifications, detection contract |
+| [ML methodology](docs/ML_METHODOLOGY.md) | Data, features, split, models, results, explainability, threats to validity |
+| [Security](docs/SECURITY.md) | Implemented controls with their tests, known gaps |
+| [Performance](docs/PERFORMANCE.md) | Measured throughput and latency, how to reproduce |
+| [Testing](docs/TESTING.md) | Test layers, what each proves, how to run them |
+| Component READMEs | [backend](backend/README.md) · [frontend](frontend/README.md) · [ml](ml/README.md) · [engine](engine/README.md) · [data](data/README.md) · [models](models/README.md) · [infrastructure](infrastructure/README.md) · [scripts](scripts/README.md) |
+
+## Status
+
+All eight planned phases are complete:
+
+| Phase | Scope |
+|---|---|
+| 1 | Architecture |
+| 2 | Repository skeleton, Docker Compose, CI |
+| 3 | Backend: auth/RBAC, database, alert engine and workflow, audit log, WebSocket |
+| 4 | ML pipeline: CIC-IDS2017, LR / RF / XGBoost, evaluation, SHAP, model bundles |
+| 5 | Real-time engine: flow builder, PCAP replay, live capture, simulator, port-scan rule, risk engine |
+| 6 | SOC dashboard on the live API |
+| 7 | Notifications (email, Slack, signed webhooks) and data retention |
+| 8 | Performance work and benchmarks, optional monitoring, documentation |
+
+A mitigation phase (dry-run policies with allow-lists, rate caps and human
+approval) is deliberately not built: it should only follow a false-positive
+rate validated on the target network.
 
 ## Repository layout
 
 ```
-backend/          FastAPI service (REST, WebSocket, auth, alerts) + alert-engine worker
-frontend/         Next.js SOC dashboard
-ml/               sentinel_ml: shared features, training, evaluation, SHAP, inference
-collector/        Scapy capture, PCAP replay, flow builder               (Phase 5)
-simulator/        safe lab traffic generator                             (Phase 5)
-data/             dataset instructions; raw data is never committed
-models/           versioned model bundles (current one committed, ~2 MB)
-infrastructure/   shared infra config (DB init, monitoring)
-tests/            cross-service integration / E2E / ML-regression tests
-scripts/          smoke test and helper scripts
-docs/             architecture and project documentation
-legacy/           original NSL-KDD + Flask prototype, kept for reference
+backend/          FastAPI API, alert engine and notifier workers, migrations, tests
+frontend/         Next.js SOC dashboard (backend-for-frontend), Playwright E2E
+ml/               argus_ml: shared features, training, evaluation, SHAP, inference
+engine/           real-time engine: simulator / PCAP / live capture, flows, rules, risk
+models/           versioned model bundle (committed, ~2 MB, checksum-verified)
+data/             dataset instructions and the simulator's flow profiles (no raw data)
+infrastructure/   DB init (least-privilege role), Prometheus and Grafana config
+scripts/          smoke test and stack benchmark
+docs/             documentation and screenshots
+legacy/           original NSL-KDD + Flask prototype, superseded, kept for reference
 ```
-
-## Datasets
-
-Training uses public datasets (CIC-IDS2017, CIC-DDoS2019, UNSW-NB15). See
-[`data/README.md`](data/README.md) for downloads, layout and citations.
-
-## Security
-
-Highlights (full list, tests and known gaps in [`docs/SECURITY.md`](docs/SECURITY.md)):
-
-- argon2id passwords, 15-minute access tokens, single-use refresh tokens with
-  theft detection, login throttling, role checks on every endpoint (tested as
-  a full matrix).
-- Append-only audit log enforced by PostgreSQL itself; the API's database
-  role cannot alter or delete entries.
-- Ports bind to `127.0.0.1`; PostgreSQL and Redis sit on an internal network;
-  containers run as non-root.
-- The defaults are for local development. Set real secrets in `.env` and put
-  a TLS reverse proxy in front before running the stack anywhere shared.
 
 ## Limitations
 
-Detection quality is bounded by the training data; encrypted or
-application-layer attacks are only visible through flow statistics; Scapy
-capture suits lab and small networks, not line-rate backbones; SHAP explains
-the model's reasoning, not ground-truth causality.
+Read these before relying on Argus:
+
+- **One training dataset.** All model numbers come from CIC-IDS2017, a lab
+  capture. Expect lower accuracy on other networks until the model is
+  validated (or retrained) on representative traffic. The simulator replays
+  held-out CIC-IDS2017 statistics, so the demo shows the model on traffic like
+  its test set, not generalisation.
+- **Weak classes.** Port scans and botnet traffic are hard to recognise per
+  flow (low precision). A window rule catches scans by port count.
+- **False positives.** About 0.2% of benign flows are flagged, so a busy
+  network sees regular low-confidence alerts for analysts to dismiss.
+- **Flow statistics only.** Encrypted or application-layer attacks are visible
+  only through their traffic shape; there is no payload inspection.
+- **Capture scale.** Live capture uses Scapy: fine for labs and small
+  networks, not line rate. Classification and alerting are faster (see
+  [performance](docs/PERFORMANCE.md)) and are not the bottleneck.
+- **Explanations.** SHAP explains the model's reasoning, not ground-truth
+  causality, and floods are explained on a sample of their flows.
+- **Adversarial traffic** crafted to look benign is not defended against.
+- **Deployment.** The defaults are for local use; TLS, real secrets and a
+  reverse proxy are required for anything shared. Remaining security gaps are
+  listed in [SECURITY.md](docs/SECURITY.md#known-gaps-and-residual-risks).
+
+## Datasets and licence notes
+
+Training uses CIC-IDS2017 (Canadian Institute for Cybersecurity), which you
+download yourself; see [`data/README.md`](data/README.md) for the layout and
+citation. The repository ships only the trained model bundle and a small file
+of derived flow profiles for the simulator.
 
 ## Legacy prototype
 
-The original NSL-KDD + Flask implementation lives in [`legacy/`](legacy/README.md)
-and will be removed once the new ML pipeline replaces it.
+The original NSL-KDD + Flask prototype in [`legacy/`](legacy/README.md) is
+superseded by Argus and kept only for reference; nothing in the stack
+uses it.

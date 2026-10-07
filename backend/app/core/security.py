@@ -13,8 +13,8 @@ from pwdlib.hashers.argon2 import Argon2Hasher
 from app.core.config import get_settings, jwt_signing_key
 
 JWT_ALGORITHM = "HS256"
-JWT_ISSUER = "sentinelai"
-JWT_AUDIENCE = "sentinelai-api"
+JWT_ISSUER = "argus"
+JWT_AUDIENCE = "argus-api"
 
 password_hasher = PasswordHash((Argon2Hasher(),))
 

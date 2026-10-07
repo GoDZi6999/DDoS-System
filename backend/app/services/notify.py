@@ -9,7 +9,9 @@ from redis.exceptions import RedisError
 
 logger = logging.getLogger(__name__)
 
-EVENTS_CHANNEL = "sentinel:events"
+EVENTS_CHANNEL = "argus:events"
+# Current detection settings, mirrored from the database for the real-time engine.
+CONFIG_KEY = "argus:config:detection"
 
 
 async def publish(redis: Redis, event_type: str, data: dict[str, Any]) -> None:
@@ -19,3 +21,10 @@ async def publish(redis: Redis, event_type: str, data: dict[str, Any]) -> None:
         await redis.publish(EVENTS_CHANNEL, json.dumps({"type": event_type, "data": data}))
     except RedisError:
         logger.warning("Could not publish %s notification", event_type, exc_info=True)
+
+
+async def mirror_detection_config(redis: Redis, config_json: str) -> None:
+    try:
+        await redis.set(CONFIG_KEY, config_json)
+    except RedisError:
+        logger.warning("Could not mirror detection settings to Redis", exc_info=True)

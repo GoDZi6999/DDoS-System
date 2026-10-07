@@ -3,6 +3,7 @@
 python -m app.cli bootstrap              create the first admin user (idempotent)
 python -m app.cli reset-password USER    set a new generated password (account recovery)
 python -m app.cli demo-detections        publish synthetic detections (pipeline testing)
+python -m app.cli purge                  apply data retention now (also run by the notifier)
 """
 
 import argparse
@@ -24,6 +25,7 @@ from app.schemas.detection import Detection, ExplanationItem
 from app.schemas.user import UserCreate
 from app.services.audit import SYSTEM_ACTOR, record_audit
 from app.services.auth import end_all_sessions
+from app.services.retention import purge as purge_data
 from app.workers.alert_engine import DETECTIONS_STREAM
 
 DEMO_STREAM_MAXLEN = 100_000
@@ -158,6 +160,24 @@ async def demo_detections(count: int, target: str, label: str) -> int:
     return 0
 
 
+async def purge() -> int:
+    settings = get_settings()
+    engine = create_engine(settings.database_url)
+    try:
+        async with create_sessionmaker(engine)() as session:
+            result = await purge_data(session, settings)
+    finally:
+        await engine.dispose()
+    if result.skipped:
+        print("Another purge is running; nothing done.")
+        return 1
+    print(
+        f"Deleted {result.events} flows older than {settings.event_retention_days} days "
+        f"(alert evidence kept) and {result.deliveries} finished notification deliveries."
+    )
+    return 0
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(prog="python -m app.cli")
     commands = parser.add_subparsers(dest="command", required=True)
@@ -173,12 +193,15 @@ def main(argv: list[str] | None = None) -> int:
         "--target", default="203.0.113.10", help="destination IP (default: TEST-NET-3)"
     )
     demo.add_argument("--label", default="ddos")
+    commands.add_parser("purge", help="apply the data retention policy now")
     args = parser.parse_args(argv)
 
     if args.command == "bootstrap":
         return asyncio.run(bootstrap())
     if args.command == "reset-password":
         return asyncio.run(reset_password(args.username))
+    if args.command == "purge":
+        return asyncio.run(purge())
     return asyncio.run(demo_detections(args.count, args.target, args.label))
 
 

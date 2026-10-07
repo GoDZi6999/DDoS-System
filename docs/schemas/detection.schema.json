@@ -1,0 +1,226 @@
+{
+  "$defs": {
+    "EventSource": {
+      "enum": [
+        "live",
+        "pcap",
+        "sim"
+      ],
+      "title": "EventSource",
+      "type": "string"
+    },
+    "ExplanationItem": {
+      "additionalProperties": false,
+      "description": "One feature's contribution to the prediction (SHAP).",
+      "properties": {
+        "contribution": {
+          "description": "Signed SHAP value",
+          "title": "Contribution",
+          "type": "number"
+        },
+        "feature": {
+          "maxLength": 64,
+          "minLength": 1,
+          "title": "Feature",
+          "type": "string"
+        },
+        "value": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Observed feature value",
+          "title": "Value"
+        },
+        "weight": {
+          "description": "Share of total |SHAP| in percent",
+          "maximum": 100,
+          "minimum": 0,
+          "title": "Weight",
+          "type": "number"
+        }
+      },
+      "required": [
+        "feature",
+        "contribution",
+        "weight"
+      ],
+      "title": "ExplanationItem",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "properties": {
+    "byte_count": {
+      "minimum": 0,
+      "title": "Byte Count",
+      "type": "integer"
+    },
+    "bytes_per_sec": {
+      "minimum": 0,
+      "title": "Bytes Per Sec",
+      "type": "number"
+    },
+    "class_probs": {
+      "maxProperties": 50,
+      "patternProperties": {
+        "^[a-z0-9_]{1,32}$": {
+          "type": "number"
+        }
+      },
+      "title": "Class Probs",
+      "type": "object"
+    },
+    "confidence": {
+      "maximum": 1,
+      "minimum": 0,
+      "title": "Confidence",
+      "type": "number"
+    },
+    "dst_ip": {
+      "format": "ipvanyaddress",
+      "title": "Dst Ip",
+      "type": "string"
+    },
+    "dst_port": {
+      "anyOf": [
+        {
+          "maximum": 65535,
+          "minimum": 0,
+          "type": "integer"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Dst Port"
+    },
+    "duration": {
+      "description": "Flow duration in seconds",
+      "minimum": 0,
+      "title": "Duration",
+      "type": "number"
+    },
+    "explanation": {
+      "items": {
+        "$ref": "#/$defs/ExplanationItem"
+      },
+      "maxItems": 20,
+      "title": "Explanation",
+      "type": "array"
+    },
+    "features": {
+      "additionalProperties": {
+        "type": "number"
+      },
+      "maxProperties": 200,
+      "propertyNames": {
+        "maxLength": 64,
+        "minLength": 1
+      },
+      "title": "Features",
+      "type": "object"
+    },
+    "label": {
+      "description": "Predicted class, e.g. benign, ddos, portscan",
+      "pattern": "^[a-z0-9_]{1,32}$",
+      "title": "Label",
+      "type": "string"
+    },
+    "model_version": {
+      "maxLength": 64,
+      "minLength": 1,
+      "title": "Model Version",
+      "type": "string"
+    },
+    "packet_count": {
+      "minimum": 0,
+      "title": "Packet Count",
+      "type": "integer"
+    },
+    "packets_per_sec": {
+      "minimum": 0,
+      "title": "Packets Per Sec",
+      "type": "number"
+    },
+    "protocol": {
+      "enum": [
+        "tcp",
+        "udp",
+        "icmp",
+        "other"
+      ],
+      "title": "Protocol",
+      "type": "string"
+    },
+    "risk_components": {
+      "additionalProperties": {
+        "type": "number"
+      },
+      "maxProperties": 10,
+      "propertyNames": {
+        "maxLength": 64,
+        "minLength": 1
+      },
+      "title": "Risk Components",
+      "type": "object"
+    },
+    "risk_score": {
+      "maximum": 100,
+      "minimum": 0,
+      "title": "Risk Score",
+      "type": "integer"
+    },
+    "source": {
+      "$ref": "#/$defs/EventSource"
+    },
+    "src_ip": {
+      "format": "ipvanyaddress",
+      "title": "Src Ip",
+      "type": "string"
+    },
+    "src_port": {
+      "anyOf": [
+        {
+          "maximum": 65535,
+          "minimum": 0,
+          "type": "integer"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Src Port"
+    },
+    "ts": {
+      "format": "date-time",
+      "title": "Ts",
+      "type": "string"
+    }
+  },
+  "required": [
+    "ts",
+    "src_ip",
+    "dst_ip",
+    "protocol",
+    "packet_count",
+    "byte_count",
+    "duration",
+    "packets_per_sec",
+    "bytes_per_sec",
+    "source",
+    "label",
+    "confidence",
+    "risk_score",
+    "model_version"
+  ],
+  "title": "Detection",
+  "type": "object"
+}

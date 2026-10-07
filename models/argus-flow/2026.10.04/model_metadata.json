@@ -1,0 +1,388 @@
+{
+  "name": "argus-flow",
+  "version": "2026.10.04",
+  "algorithm": "xgboost",
+  "params": {
+    "objective": "'multi:softprob'",
+    "base_score": "None",
+    "booster": "None",
+    "callbacks": "None",
+    "colsample_bylevel": "None",
+    "colsample_bynode": "None",
+    "colsample_bytree": "0.8",
+    "device": "None",
+    "early_stopping_rounds": "None",
+    "enable_categorical": "True",
+    "eval_metric": "None",
+    "feature_types": "None",
+    "feature_weights": "None",
+    "gamma": "None",
+    "grow_policy": "None",
+    "importance_type": "None",
+    "interaction_constraints": "None",
+    "learning_rate": "0.1",
+    "max_bin": "None",
+    "max_cat_threshold": "None",
+    "max_cat_to_onehot": "None",
+    "max_delta_step": "None",
+    "max_depth": "8",
+    "max_leaves": "None",
+    "min_child_weight": "None",
+    "missing": "nan",
+    "monotone_constraints": "None",
+    "multi_strategy": "None",
+    "n_estimators": "300",
+    "n_jobs": "-1",
+    "num_parallel_tree": "None",
+    "random_state": "42",
+    "reg_alpha": "None",
+    "reg_lambda": "None",
+    "sampling_method": "None",
+    "scale_pos_weight": "None",
+    "subsample": "0.8",
+    "tree_method": "'hist'",
+    "validate_parameters": "None",
+    "verbosity": "None"
+  },
+  "decision_weights": {
+    "benign": 1.0,
+    "ddos": 1.0,
+    "dos": 1.0,
+    "portscan": 1.0,
+    "bruteforce": 1.0,
+    "webattack": 1.0,
+    "botnet": 1.0
+  },
+  "trained_at": "2026-10-04T11:24:28.807808+00:00",
+  "git_commit": "f798b926608c419455a888ab490a8ac87c7da0c3",
+  "dataset": {
+    "name": "CIC-IDS2017 MachineLearningCVE",
+    "files": [
+      "Friday-WorkingHours-Afternoon-DDos.pcap_ISCX.csv",
+      "Friday-WorkingHours-Afternoon-PortScan.pcap_ISCX.csv",
+      "Friday-WorkingHours-Morning.pcap_ISCX.csv",
+      "Monday-WorkingHours.pcap_ISCX.csv",
+      "Thursday-WorkingHours-Afternoon-Infilteration.pcap_ISCX.csv",
+      "Thursday-WorkingHours-Morning-WebAttacks.pcap_ISCX.csv",
+      "Tuesday-WorkingHours.pcap_ISCX.csv",
+      "Wednesday-workingHours.pcap_ISCX.csv"
+    ],
+    "sha256": "877840ea5812eab3c93e5e3c76db0fb14f7e7a51081cd98dc0d298564f090aab",
+    "cleaning": {
+      "rows_loaded": 2830743,
+      "dropped_rare_classes": 47,
+      "dropped_negative_duration": 115,
+      "dropped_exact_duplicates": 653453,
+      "dropped_conflicting_labels": 810,
+      "rows_kept": 2176318,
+      "class_counts": {
+        "benign": 1840265,
+        "dos": 193496,
+        "ddos": 128013,
+        "bruteforce": 9149,
+        "webattack": 2143,
+        "portscan": 1851,
+        "botnet": 1401
+      }
+    },
+    "split": "temporal 70/30 per (file, label) group",
+    "validation": "last 20% of each group's training part, real class mix",
+    "train_rows": 1523414,
+    "train_rows_used": 1523414,
+    "validation_rows": 304674,
+    "test_rows": 652904,
+    "train_cap_per_attack_class": 150000,
+    "train_class_counts": {
+      "benign": 1288181,
+      "dos": 135446,
+      "ddos": 89609,
+      "bruteforce": 6404,
+      "webattack": 1499,
+      "portscan": 1295,
+      "botnet": 980
+    },
+    "test_class_counts": {
+      "benign": 552084,
+      "dos": 58050,
+      "ddos": 38404,
+      "bruteforce": 2745,
+      "webattack": 644,
+      "portscan": 556,
+      "botnet": 421
+    }
+  },
+  "selection": "highest validation macro-F1 (argmax)",
+  "decision_tuning": false,
+  "candidates": {
+    "logistic_regression": {
+      "val_macro_f1": 0.593150119531724,
+      "val_macro_f1_argmax": 0.5052325093316791,
+      "test_macro_f1": 0.5351423864515363,
+      "fit_seconds": 196.11413401000027,
+      "decision_weights": {
+        "benign": 1.0,
+        "ddos": 0.2,
+        "dos": 0.3513,
+        "portscan": 0.2,
+        "bruteforce": 0.2,
+        "webattack": 0.2,
+        "botnet": 0.2
+      }
+    },
+    "random_forest": {
+      "val_macro_f1": 0.9210792247177523,
+      "val_macro_f1_argmax": 0.8613825833318565,
+      "test_macro_f1": 0.7670447932386308,
+      "fit_seconds": 112.6109815499999,
+      "decision_weights": {
+        "benign": 1.0,
+        "ddos": 0.7248,
+        "dos": 0.9227,
+        "portscan": 1.0,
+        "bruteforce": 0.2546,
+        "webattack": 0.2,
+        "botnet": 0.2
+      }
+    },
+    "xgboost": {
+      "val_macro_f1": 0.9437215727733453,
+      "val_macro_f1_argmax": 0.9383106364087047,
+      "test_macro_f1": 0.7674273157611194,
+      "fit_seconds": 134.4224286040003,
+      "decision_weights": {
+        "benign": 1.0,
+        "ddos": 0.2,
+        "dos": 0.5253,
+        "portscan": 1.0,
+        "bruteforce": 0.2,
+        "webattack": 0.2,
+        "botnet": 0.2
+      }
+    }
+  },
+  "ablation": {
+    "dropped": [
+      "init_win_bytes_fwd",
+      "init_win_bytes_bwd"
+    ],
+    "val_macro_f1": 0.9201118712400801,
+    "val_macro_f1_argmax": 0.8238784661510584,
+    "test_macro_f1": 0.7490657976590952,
+    "fit_seconds": 135.598988621,
+    "decision_weights": {
+      "benign": 1.0,
+      "ddos": 0.5253,
+      "dos": 0.3241,
+      "portscan": 0.2,
+      "bruteforce": 0.2,
+      "webattack": 0.2,
+      "botnet": 0.2
+    }
+  },
+  "metrics": {
+    "accuracy": 0.9956042542242045,
+    "macro_precision": 0.8150028383363704,
+    "macro_recall": 0.9319818843653066,
+    "macro_f1": 0.8529720108581571,
+    "weighted_f1": 0.9959959890346769,
+    "roc_auc_ovr_macro": 0.9993471349642858,
+    "pr_auc_macro": 0.8875277454519094,
+    "attack_detection_rate": 0.9872247569926602,
+    "false_positive_rate": 0.001097659051883409,
+    "per_class": {
+      "benign": {
+        "precision": 0.9976699001023941,
+        "recall": 0.9989023409481166,
+        "f1": 0.9982857401457211,
+        "support": 552084
+      },
+      "ddos": {
+        "precision": 0.9998435789144376,
+        "recall": 0.998645974377669,
+        "f1": 0.999244417810896,
+        "support": 38404
+      },
+      "dos": {
+        "precision": 0.9962511548575084,
+        "recall": 0.9659431524547804,
+        "f1": 0.9808630853464412,
+        "support": 58050
+      },
+      "portscan": {
+        "precision": 0.3328748280605227,
+        "recall": 0.8705035971223022,
+        "f1": 0.481592039800995,
+        "support": 556
+      },
+      "bruteforce": {
+        "precision": 0.998898678414097,
+        "recall": 0.9912568306010929,
+        "f1": 0.9950630828304992,
+        "support": 2745
+      },
+      "webattack": {
+        "precision": 0.8589562764456982,
+        "recall": 0.9456521739130435,
+        "f1": 0.9002217294900222,
+        "support": 644
+      },
+      "botnet": {
+        "precision": 0.5205254515599343,
+        "recall": 0.7529691211401425,
+        "f1": 0.6155339805825243,
+        "support": 421
+      }
+    },
+    "confusion_matrix": [
+      [
+        551478,
+        6,
+        208,
+        4,
+        2,
+        94,
+        292
+      ],
+      [
+        52,
+        38352,
+        0,
+        0,
+        0,
+        0,
+        0
+      ],
+      [
+        1010,
+        0,
+        56073,
+        963,
+        0,
+        4,
+        0
+      ],
+      [
+        68,
+        0,
+        2,
+        484,
+        0,
+        2,
+        0
+      ],
+      [
+        24,
+        0,
+        0,
+        0,
+        2721,
+        0,
+        0
+      ],
+      [
+        30,
+        0,
+        1,
+        3,
+        1,
+        609,
+        0
+      ],
+      [
+        104,
+        0,
+        0,
+        0,
+        0,
+        0,
+        317
+      ]
+    ],
+    "calibration_error": 0.003024538425867029,
+    "batch_us_per_flow": 9.352394937080266,
+    "single_flow_ms": 1.4920759999768052
+  },
+  "metrics_argmax": {
+    "accuracy": 0.9956042542242045,
+    "macro_precision": 0.8150028383363704,
+    "macro_recall": 0.9319818843653066,
+    "macro_f1": 0.8529720108581571,
+    "weighted_f1": 0.9959959890346769,
+    "roc_auc_ovr_macro": 0.9993471349642858,
+    "pr_auc_macro": 0.8875277454519094,
+    "attack_detection_rate": 0.9872247569926602,
+    "false_positive_rate": 0.001097659051883409,
+    "per_class": {
+      "benign": {
+        "precision": 0.9976699001023941,
+        "recall": 0.9989023409481166,
+        "f1": 0.9982857401457211,
+        "support": 552084
+      },
+      "ddos": {
+        "precision": 0.9998435789144376,
+        "recall": 0.998645974377669,
+        "f1": 0.999244417810896,
+        "support": 38404
+      },
+      "dos": {
+        "precision": 0.9962511548575084,
+        "recall": 0.9659431524547804,
+        "f1": 0.9808630853464412,
+        "support": 58050
+      },
+      "portscan": {
+        "precision": 0.3328748280605227,
+        "recall": 0.8705035971223022,
+        "f1": 0.481592039800995,
+        "support": 556
+      },
+      "bruteforce": {
+        "precision": 0.998898678414097,
+        "recall": 0.9912568306010929,
+        "f1": 0.9950630828304992,
+        "support": 2745
+      },
+      "webattack": {
+        "precision": 0.8589562764456982,
+        "recall": 0.9456521739130435,
+        "f1": 0.9002217294900222,
+        "support": 644
+      },
+      "botnet": {
+        "precision": 0.5205254515599343,
+        "recall": 0.7529691211401425,
+        "f1": 0.6155339805825243,
+        "support": 421
+      }
+    },
+    "calibration_error": 0.003024538425867029,
+    "batch_us_per_flow": 12.328735279611497,
+    "single_flow_ms": 1.5272515001925058
+  },
+  "fit_seconds": 125.67834408399995,
+  "top_features": {
+    "init_win_bytes_fwd": 7.583399772644043,
+    "init_win_bytes_bwd": 6.562900066375732,
+    "flow_iat_min": 4.572800159454346,
+    "flow_iat_max": 4.210899829864502,
+    "pkt_len_mean": 3.415600061416626,
+    "flow_iat_mean": 2.905900001525879,
+    "bwd_packets": 2.8989999294281006,
+    "fwd_pkt_len_mean": 2.7697999477386475,
+    "flow_iat_std": 2.741300106048584,
+    "bwd_pkt_len_mean": 2.618299961090088
+  },
+  "environment": {
+    "python": "3.12.3",
+    "scikit-learn": "1.9.1",
+    "xgboost": "3.4.1",
+    "shap": "0.52.0",
+    "pandas": "3.0.6",
+    "numpy": "2.5.3"
+  },
+  "checksums": {
+    "model.joblib": "091e57bcdd8ed088efd6f3ef7796ecfda2e1b67e88f1d2acc70bc05c9dba9a61",
+    "background.joblib": "94045cd989b9a9cf9aeb99c36f39ba75ca84c23fc944c0973824d434da8e29a1"
+  }
+}

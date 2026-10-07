@@ -1,3 +1,3 @@
-"""SentinelAI backend API."""
+"""Argus backend API."""
 
 __version__ = "0.1.0"

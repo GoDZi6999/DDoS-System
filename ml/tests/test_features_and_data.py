@@ -2,8 +2,8 @@ import numpy as np
 import pandas as pd
 import pytest
 
-from sentinel_ml import data, features
-from sentinel_ml.features import FEATURE_NAMES, FEATURES
+from argus_ml import data, features
+from argus_ml.features import FEATURE_NAMES, FEATURES
 
 
 def _cic_row(**overrides) -> pd.DataFrame:

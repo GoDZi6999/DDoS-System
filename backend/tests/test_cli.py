@@ -71,3 +71,15 @@ def test_reset_password_recovers_an_account(client, capsys):
         "source": "cli",
     }
     assert cli.main(["reset-password", "nobody"]) == 1
+
+
+def test_purge_applies_the_retention_policy(client, capsys):
+    from datetime import UTC, datetime, timedelta
+
+    from app.models import NetworkEvent
+    from tests.helpers import ingest
+
+    ingest(client, ts=datetime.now(UTC) - timedelta(days=60), label="benign", risk_score=0)
+    assert cli.main(["purge"]) == 0
+    assert "Deleted 1 flows" in capsys.readouterr().out
+    assert count_rows(client, NetworkEvent) == 0
