@@ -29,7 +29,7 @@ const badge: Record<ServiceState, { label: string; dot: string }> = {
   unknown: { label: "Unknown", dot: "bg-muted" },
 };
 
-export const metadata = { title: "System status · SentinelAI" };
+export const metadata = { title: "System status · Argus" };
 
 export default async function StatusPage() {
   // Render on every request: without this, the build would prerender the page
@@ -46,7 +46,7 @@ export default async function StatusPage() {
   return (
     <main className="mx-auto flex w-full max-w-3xl flex-1 flex-col gap-8 px-6 py-16">
       <header>
-        <p className="label-caps text-accent">SENTINEL//AI · public status</p>
+        <p className="label-caps text-accent">ARGUS · public status</p>
         <h1 className="mt-2 font-display text-3xl font-bold uppercase tracking-[0.1em]">System status</h1>
         <p className="mt-3 text-ink-2">
           Public health check: confirms that every service in the stack is reachable. It needs

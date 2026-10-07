@@ -14,7 +14,7 @@ from sklearn.preprocessing import StandardScaler
 from sklearn.utils.class_weight import compute_sample_weight
 from xgboost import XGBClassifier
 
-from sentinel_ml.features import FEATURE_NAMES
+from argus_ml.features import FEATURE_NAMES
 
 
 class FlowPreprocessor(BaseEstimator, TransformerMixin):

@@ -20,11 +20,13 @@ function Svg({ className = "size-4", children }: IconProps & { children: React.R
   );
 }
 
-export function ShieldIcon(props: IconProps) {
+/** Argus: the all-seeing watcher of Greek myth. */
+export function EyeIcon(props: IconProps) {
   return (
     <Svg {...props}>
-      <path d="M12 3 4.5 6v5.5c0 4.6 3.1 8.4 7.5 9.5 4.4-1.1 7.5-4.9 7.5-9.5V6L12 3Z" />
-      <path d="m8.8 12.2 2.2 2.2 4.4-4.6" />
+      <path d="M2.5 12S6 5.5 12 5.5 21.5 12 21.5 12 18 18.5 12 18.5 2.5 12 2.5 12Z" />
+      <circle cx="12" cy="12" r="3.2" />
+      <circle cx="12" cy="12" r="0.9" fill="currentColor" />
     </Svg>
   );
 }

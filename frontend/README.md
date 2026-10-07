@@ -1,6 +1,6 @@
 # Frontend (Next.js + Tailwind)
 
-SOC dashboard for SentinelAI. Every widget reads the live API; there is no
+SOC dashboard for Argus. Every widget reads the live API; there is no
 hard-coded or mock data.
 
 > This Next.js version (16.x) differs from older releases. See `AGENTS.md`
@@ -33,7 +33,7 @@ Next.js is a backend-for-frontend (`lib/session.ts`):
 - **`/api/backend/*`** proxies an allowlist of API endpoints, attaching the
   bearer token and refreshing it when it is about to expire. Concurrent
   refreshes share one API call, because the API treats a reused refresh token
-  as theft. State-changing requests need the `x-sentinel-csrf: 1` header and a
+  as theft. State-changing requests need the `x-argus-csrf: 1` header and a
   same-origin `Origin`; bodies are capped at 64 KB.
 - **`/api/live`** opens the API WebSocket server-side and relays it to the
   browser as Server-Sent Events (`lib/live.tsx`). Alert events revalidate the

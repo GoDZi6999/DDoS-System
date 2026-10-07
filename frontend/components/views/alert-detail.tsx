@@ -154,7 +154,7 @@ export function AlertDetailView({ id }: { id: number }) {
         <div className="space-y-4 lg:col-span-2">
           <Card
             title="Recommended action"
-            description="Advisory: SentinelAI does not block traffic itself."
+            description="Advisory: Argus does not block traffic itself."
             tone={alert.severity === "CRITICAL" && alert.allowed_transitions.length && alert.status !== "RESOLVED" && alert.status !== "FALSE_POSITIVE" ? "critical" : undefined}
           >
             <p className="text-sm text-ink">{alert.recommended_action}</p>

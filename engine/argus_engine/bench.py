@@ -1,6 +1,6 @@
 """Engine benchmark: classification + explanation + risk, in process.
 
-    python -m sentinel_engine bench [--flows 3000] [--json]
+    python -m argus_engine bench [--flows 3000] [--json]
 
 Runs the real model bundle on flows sampled from the held-out profiles
 (data/samples/flow_profiles.csv), through Engine.handle_flows, which is what
@@ -16,11 +16,11 @@ import time
 from pathlib import Path
 
 import numpy as np
-from sentinel_ml.inference import Predictor
+from argus_ml.inference import Predictor
 
-from sentinel_engine.pipeline import Engine
-from sentinel_engine.publisher import MemoryPublisher
-from sentinel_engine.simulator import Simulator
+from argus_engine.pipeline import Engine
+from argus_engine.publisher import MemoryPublisher
+from argus_engine.simulator import Simulator
 
 
 def _records(sim: Simulator, label: str, count: int, now: float) -> list[dict]:

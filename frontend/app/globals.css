@@ -1,6 +1,6 @@
 @import "tailwindcss";
 
-/* SentinelAI SOC console theme (dark only).
+/* Argus SOC console theme (dark only).
    Chart colours: benign #1a9fd6 and attack #e8394a, validated against the
    panel surface (lightness band, CVD separation, contrast). Status colours
    always appear with a text label and a glyph, never alone. */

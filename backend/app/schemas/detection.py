@@ -1,6 +1,6 @@
 """Contract for detections published by the ML engine.
 
-Each detection is one entry on the Redis stream `sentinel:detections`, with a
+Each detection is one entry on the Redis stream `argus:detections`, with a
 single field `data` holding this model as JSON. Documented in docs/API.md.
 """
 

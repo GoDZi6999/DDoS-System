@@ -6,8 +6,8 @@
 // token and transparently rotates it with the refresh token when it expires.
 import { cookies, headers } from "next/headers";
 
-export const ACCESS_COOKIE = "sentinel_access";
-export const REFRESH_COOKIE = "sentinel_refresh";
+export const ACCESS_COOKIE = "argus_access";
+export const REFRESH_COOKIE = "argus_refresh";
 
 const API = process.env.API_INTERNAL_URL ?? "http://localhost:8000";
 
@@ -71,7 +71,7 @@ export async function login(username: string, password: string): Promise<LoginRe
       cache: "no-store",
     });
   } catch {
-    return { ok: false, error: "The SentinelAI API is unreachable." };
+    return { ok: false, error: "The Argus API is unreachable." };
   }
   if (response.status === 429) {
     const wait = Math.ceil(Number(response.headers.get("retry-after") ?? "60") / 60);

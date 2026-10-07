@@ -10,7 +10,7 @@ import {
   LogIcon,
   PowerIcon,
   RadarIcon,
-  ShieldIcon,
+  EyeIcon,
   SlidersIcon,
   UsersIcon,
 } from "@/components/icons";
@@ -45,11 +45,11 @@ function Brand() {
   return (
     <Link href="/" className="group flex items-center gap-2.5">
       <span className="relative grid size-9 place-items-center rounded-sm border border-accent/50 bg-accent/10 text-accent shadow-[0_0_18px_-6px_var(--accent)]">
-        <ShieldIcon className="size-5" />
+        <EyeIcon className="size-5" />
       </span>
       <span className="leading-tight">
         <span className="block font-display text-base font-bold tracking-[0.18em] text-ink">
-          SENTINEL<span className="text-accent">{"//"}</span>AI
+          AR<span className="text-accent">GUS</span>
         </span>
         <span className="label-caps block text-[0.6rem] text-muted">SOC console</span>
       </span>
@@ -224,7 +224,7 @@ export function PageHeader({
     <div className="mb-6 flex flex-wrap items-end justify-between gap-3">
       <div>
         <p className="label-caps text-accent">
-          <span aria-hidden>{"// "}</span>SentinelAI
+          <span aria-hidden>{"// "}</span>Argus
         </p>
         <h1 className="mt-1 font-display text-2xl font-bold uppercase tracking-[0.08em] text-ink">
           {title}

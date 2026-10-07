@@ -1,4 +1,4 @@
-# SentinelAI API
+# Argus API
 
 Base path `/api/v1`. Interactive documentation (Swagger UI, generated from the
 code) is served at <http://localhost:8000/docs>; its **Authorize** button logs
@@ -71,7 +71,7 @@ severity, source IP and explanation; a jump to a higher severity band is
 recorded as `alert.escalated`.
 
 Severity bands: 0–30 LOW, 31–60 MEDIUM, 61–80 HIGH, 81–100 CRITICAL.
-`recommended_action` is advisory text; SentinelAI does not block traffic.
+`recommended_action` is advisory text; Argus does not block traffic.
 
 ### Workflow
 
@@ -163,10 +163,10 @@ Channel `config` by `kind`:
 | `slack` | `{"webhook_url": "https://hooks.slack.com/services/…"}` | Slack incoming webhook; message with fields and a link. |
 | `webhook` | `{"url": "https://…", "secret": "16+ chars"}` | JSON POST. Omitting `secret` in a PATCH keeps the stored one; `null` removes it. |
 
-Webhook requests carry `X-Sentinel-Event` (`alert.created`, `alert.escalated`,
-`test`), `X-Sentinel-Delivery` (id, stable across retries, so receivers can
-de-duplicate), `X-Sentinel-Timestamp` and, with a secret,
-`X-Sentinel-Signature: sha256=<hex>`, the HMAC-SHA256 of
+Webhook requests carry `X-Argus-Event` (`alert.created`, `alert.escalated`,
+`test`), `X-Argus-Delivery` (id, stable across retries, so receivers can
+de-duplicate), `X-Argus-Timestamp` and, with a secret,
+`X-Argus-Signature: sha256=<hex>`, the HMAC-SHA256 of
 `"<timestamp>.<raw body>"`. Receivers should verify it with a constant-time
 comparison and reject old timestamps. Body:
 
@@ -210,7 +210,7 @@ ws.onclose = (e) => { if (e.code === 4401) { /* refresh the token, reconnect */ 
 ## Detection stream (ML engine → alert engine)
 
 Producers (the real-time engine in `engine/`; `python -m app.cli demo-detections`
-for testing) append to the Redis stream **`sentinel:detections`**, one entry per
+for testing) append to the Redis stream **`argus:detections`**, one entry per
 analysed flow, with a single field `data` containing JSON. The machine-readable
 contract is [`schemas/detection.schema.json`](schemas/detection.schema.json):
 the backend tests check it matches the model, the engine tests validate their
@@ -236,7 +236,7 @@ output against it.
 ```
 
 Detection settings changed through `PUT /config/detection` are mirrored to
-the Redis key `sentinel:config:detection`, where the engine reads its risk
+the Redis key `argus:config:detection`, where the engine reads its risk
 weights.
 
 Rules (`backend/app/schemas/detection.py`): unknown fields are rejected;
@@ -249,7 +249,7 @@ the alert engine.
 Delivery is at-least-once through the consumer group `alert-engine`: an entry
 is acknowledged after its transaction commits; the stream entry id is stored
 with the event so a redelivery is not stored twice; invalid entries are moved
-to `sentinel:detections:dead` with the validation error; entries left pending
+to `argus:detections:dead` with the validation error; entries left pending
 by a crashed consumer are reclaimed after 60 seconds.
 
 ## Operational commands

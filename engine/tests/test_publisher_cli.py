@@ -1,9 +1,9 @@
 import pytest
 from redis.exceptions import ConnectionError as RedisConnectionError
 
-from sentinel_engine import publisher as publisher_module
-from sentinel_engine.__main__ import main
-from sentinel_engine.publisher import RedisPublisher
+from argus_engine import publisher as publisher_module
+from argus_engine.__main__ import main
+from argus_engine.publisher import RedisPublisher
 
 
 class FlakyPipeline:

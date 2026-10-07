@@ -30,7 +30,7 @@ class WebhookConfig(BaseModel):
     model_config = ConfigDict(extra="forbid")
     url: AnyHttpUrl
     secret: Secret | None = Field(
-        None, description="Signs each request (X-Sentinel-Signature, HMAC-SHA256)"
+        None, description="Signs each request (X-Argus-Signature, HMAC-SHA256)"
     )
 
 

@@ -12,7 +12,7 @@ const USERNAME = process.env.ADMIN_USERNAME ?? "admin";
 const PASSWORD = process.env.ADMIN_PASSWORD ?? "";
 const INJECT =
   process.env.E2E_INJECT_COMMAND ??
-  "docker compose exec -T engine python -m sentinel_engine inject --scenario ddos --duration 10";
+  "docker compose exec -T engine python -m argus_engine inject --scenario ddos --duration 10";
 const TARGET = "10.20.0.10:80";
 
 test.skip(!PASSWORD, "set ADMIN_PASSWORD to run the end-to-end tests");
@@ -56,7 +56,7 @@ test("a simulated DDoS is detected live and worked to resolution", async ({ page
 
   await expect(page.getByRole("heading", { name: `DDoS → ${TARGET}` })).toBeVisible();
   await expect(page.getByText("Why the model flagged it")).toBeVisible();
-  await expect(page.getByText(/Advisory: SentinelAI does not block traffic/)).toBeVisible();
+  await expect(page.getByText(/Advisory: Argus does not block traffic/)).toBeVisible();
 
   const workflow = async (button: string, status: string) => {
     await page.getByRole("button", { name: button, exact: true }).click();
@@ -119,7 +119,7 @@ test("an admin adds an email channel and its test message is delivered", async (
     await expect(logRow.getByText("Sent", { exact: true })).toBeVisible({ timeout: 30_000 });
     const messages = await (await request.get(`${mailpit}/api/v1/messages`)).json();
     expect(messages.messages.map((m: { Subject: string }) => m.Subject)).toContain(
-      `SentinelAI test notification for channel '${name}'`,
+      `Argus test notification for channel '${name}'`,
     );
   } else {
     // Without an SMTP relay (the default) the delivery fails with a clear reason.

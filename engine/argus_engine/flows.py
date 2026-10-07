@@ -1,4 +1,4 @@
-"""Bidirectional flow builder computing SentinelAI's 37 flow features.
+"""Bidirectional flow builder computing Argus's 37 flow features.
 
 Definitions follow CICFlowMeter (which produced the training data) so live
 flows are comparable with CIC-IDS2017:
@@ -25,7 +25,7 @@ capture (see docs/ML_METHODOLOGY.md, threats to validity).
 import math
 from dataclasses import dataclass, field
 
-from sentinel_engine.packets import Packet
+from argus_engine.packets import Packet
 
 IDLE_TIMEOUT_S = 5.0
 ACTIVE_TIMEOUT_S = 120.0
@@ -147,7 +147,7 @@ class Flow:
         return self.reset or (self.fin_fwd and self.fin_bwd)
 
     def features(self) -> dict[str, float]:
-        """The 37 model features (rates are recomputed by sentinel_ml.features)."""
+        """The 37 model features (rates are recomputed by argus_ml.features)."""
         active, idle = self.active, self.idle
         active_mean = idle_mean = 0.0
         if idle.n:

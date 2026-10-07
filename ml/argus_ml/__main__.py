@@ -1,7 +1,7 @@
 """Command line:
 
-python -m sentinel_ml train   --data data/raw/cic-ids2017/MachineLearningCVE
-python -m sentinel_ml predict --bundle models/sentinel-flow/<version> --csv flows.csv
+python -m argus_ml train   --data data/raw/cic-ids2017/MachineLearningCVE
+python -m argus_ml predict --bundle models/argus-flow/<version> --csv flows.csv
 """
 
 import argparse
@@ -14,7 +14,7 @@ import pandas as pd
 
 
 def main(argv: list[str] | None = None) -> int:
-    parser = argparse.ArgumentParser(prog="python -m sentinel_ml")
+    parser = argparse.ArgumentParser(prog="python -m argus_ml")
     commands = parser.add_subparsers(dest="command", required=True)
 
     train = commands.add_parser("train", help="train, evaluate and bundle the models")
@@ -45,7 +45,7 @@ def main(argv: list[str] | None = None) -> int:
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
 
     if args.command == "train":
-        from sentinel_ml.train import run
+        from argus_ml.train import run
 
         run(
             args.data, args.models, args.reports, args.cap, args.seed, ablation=not args.no_ablation
@@ -53,14 +53,14 @@ def main(argv: list[str] | None = None) -> int:
         return 0
 
     if args.command == "export-profiles":
-        from sentinel_ml.profiles import export_profiles
+        from argus_ml.profiles import export_profiles
 
         profiles = export_profiles(args.data, args.out)
         print(f"Wrote {len(profiles)} flows to {args.out}")
         return 0
 
-    from sentinel_ml import features
-    from sentinel_ml.inference import Predictor
+    from argus_ml import features
+    from argus_ml.inference import Predictor
 
     frame = pd.read_csv(args.csv, encoding="latin-1", nrows=args.limit)
     frame.columns = [c.strip() for c in frame.columns]

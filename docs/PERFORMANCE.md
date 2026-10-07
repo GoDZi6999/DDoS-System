@@ -1,7 +1,7 @@
 # Performance
 
 Measured on 2026-10-04 on a 4-core x86_64 VM with 15 GB RAM, Docker Compose,
-default settings, model `sentinel-flow-2026.10.03`. Numbers vary by machine;
+default settings, model `argus-flow-2026.10.03`. Numbers vary by machine;
 the commands below reproduce them.
 
 ## Summary
@@ -22,7 +22,7 @@ lab-scale traffic; the simulator and PCAP replay bypass it.
 ## 1. Engine
 
 ```bash
-python -m sentinel_engine bench            # PYTHONPATH=engine:ml from the repo root
+python -m argus_engine bench            # PYTHONPATH=engine:ml from the repo root
 ```
 
 Runs `Engine.handle_flows` (classification, SHAP, risk, detection building),

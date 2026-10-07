@@ -1,4 +1,4 @@
-"""The single definition of SentinelAI's flow features.
+"""The single definition of Argus's flow features.
 
 Both training (from CIC-IDS2017 CSVs) and live inference (from the Phase 5
 flow builder) go through this module, so a feature always means the same

@@ -11,7 +11,7 @@ push (`.github/workflows/ci.yml`).
 | Frontend | `frontend/` | Lint, type check, production build, audit of production dependencies | `npm run lint && npm run build` |
 | Stack smoke test | `scripts/smoke_test.sh` | `docker compose up` works end to end: health, metrics, dashboard session guard and CSRF check, login, engine traffic stored, simulated DDoS raises an alert from the trained model, alert email delivered (with the mail profile), audit log append-only for the app's database role | `ADMIN_PASSWORD=… ./scripts/smoke_test.sh` |
 | Dashboard E2E | `frontend/e2e/` (Playwright, 4 tests) | Sign-in and refusal of bad credentials; live feed; injected DDoS appears without reload and is worked through acknowledge → assign → note → contain → resolve, visible in the audit log; settings; adding an email channel and delivering its test message | `cd frontend && ADMIN_PASSWORD=… npm run test:e2e` |
-| Benchmarks | `python -m sentinel_engine bench`, `scripts/benchmark_stack.py` | Throughput and latency (not pass/fail) | see [`PERFORMANCE.md`](PERFORMANCE.md) |
+| Benchmarks | `python -m argus_engine bench`, `scripts/benchmark_stack.py` | Throughput and latency (not pass/fail) | see [`PERFORMANCE.md`](PERFORMANCE.md) |
 
 ## Principles
 

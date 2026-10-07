@@ -2,8 +2,8 @@ import math
 
 import pytest
 
-from sentinel_engine.flows import FlowTable
-from sentinel_engine.packets import Packet
+from argus_engine.flows import FlowTable
+from argus_engine.packets import Packet
 
 C, S = "10.0.0.1", "10.0.0.2"  # client, server
 

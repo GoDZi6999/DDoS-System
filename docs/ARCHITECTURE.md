@@ -1,9 +1,9 @@
-# SentinelAI — Phase 1 Architecture
+# Argus — Phase 1 Architecture
 
 Real-Time AI-Powered Network Threat Detection & SOC Platform.
 Status: **approved** (2026-10-03). Implementation progress is tracked in the root README.
 
-**Claim scope.** SentinelAI *detects and classifies suspicious network traffic in real time and raises risk-scored alerts*. It does not claim to prevent DDoS. Mitigation is a future, opt-in, safeguarded phase (§11).
+**Claim scope.** Argus *detects and classifies suspicious network traffic in real time and raises risk-scored alerts*. It does not claim to prevent DDoS. Mitigation is a future, opt-in, safeguarded phase (§11).
 
 ## 0. Findings on the existing prototype
 
@@ -16,7 +16,7 @@ The current root-level Flask app trains on NSL-KDD (`data_preprocessing.py`, `mo
 | In-process queue, Flask-SocketIO, open dashboard, `SECRET_KEY` default | No auth, no persistence, not horizontally separable | FastAPI + Redis + PostgreSQL + JWT/RBAC |
 | NSL-KDD (1999 traffic) | Weak real-world relevance | CIC-IDS2017 / CIC-DDoS2019 primary; UNSW-NB15 for cross-dataset generalisation check |
 
-The prototype is retained under `legacy/` for reference only; SentinelAI superseded it in Phase 4 and nothing uses it.
+The prototype is retained under `legacy/` for reference only; Argus superseded it in Phase 4 and nothing uses it.
 
 ## 1. System architecture
 
@@ -54,7 +54,7 @@ Design principles:
 |---|---|---|
 | `engine` (sources) | Sniff an interface or replay a PCAP (speed factor, retimed), or run the safe simulator | Scapy (AsyncSniffer / PcapReader) |
 | `engine` (flow builder) | Aggregate packets to bidirectional flows by 5-tuple; RST/FIN, idle and active timeouts; CICFlowMeter-style features | Python |
-| `sentinel_ml.features` | Flow → fixed feature vector (shared with training) | Python package in `ml/` |
+| `argus_ml.features` | Flow → fixed feature vector (shared with training) | Python package in `ml/` |
 | `engine` (classifier + rules) | Versioned model bundle → class, probability, SHAP top-5; window rule for port scans | scikit-learn, XGBoost, SHAP |
 | `engine` (risk) | Combine signals into 0–100 score; baseline frozen during attacks | Pure Python, weights from the settings API via Redis |
 | `alert_service` | Dedupe/aggregate detections into alerts; state machine; notifications | FastAPI service module + Redis |
@@ -152,7 +152,7 @@ Indexes: `alerts(status, last_seen_at)`, `alerts(attack_type, destination_ip, st
 | Events | `GET /events`, `GET /events/{id}` (with prediction + SHAP) | Viewer |
 | Stats | `GET /stats/summary` (events, attacks, blocked/contained, current risk), `GET /stats/timeseries`, `GET /stats/distribution` | Viewer |
 | Detection | `GET/PUT /config/detection` (threshold, window, risk weights); planned: `POST /detect`, `GET /models`, `POST /models/{id}/activate` (Phase 4/5) | Analyst read / Admin write |
-| Ingest control | Engine CLI for now (`python -m sentinel_engine run|inject`, see `engine/README.md`); API control endpoints deferred | Admin |
+| Ingest control | Engine CLI for now (`python -m argus_engine run|inject`, see `engine/README.md`); API control endpoints deferred | Admin |
 | Audit | `GET /audit` | Admin |
 | Ops | `GET /health`, `GET /health/ready`, `GET /metrics` (Prometheus) | internal |
 | Realtime | `WS /api/v1/ws`, authenticated by its first message (no token in the URL) — `alert.new`, `alert.updated`; planned: `stats.tick`, `traffic.tick` (Phase 5) | Viewer |
@@ -203,7 +203,7 @@ docker compose up
   backend       FastAPI (uvicorn)    REST + WebSocket; trusts X-Forwarded-For only from frontend
   alert-engine  backend image        detections -> events, alerts, notification outbox
   notifier      backend image        sends notifications (retries), applies retention
-  engine        sentinel_engine      simulator by default; PCAP replay / live capture options
+  engine        argus_engine      simulator by default; PCAP replay / live capture options
   frontend      Next.js (standalone) dashboard + backend-for-frontend; fixed IP 172.28.0.10
   mailpit       (profile "mail")     local SMTP catcher for testing email notifications
 ```
@@ -214,10 +214,10 @@ Networks: `frontnet` (browser-facing: frontend, backend), `corenet` (internal, n
 ```
 backend/        app/{api,core,db,models,schemas,services,workers}, alembic/, tests/
 frontend/       app/ (routes, BFF route handlers), components/, lib/, e2e/ (Playwright), proxy.ts
-ml/             sentinel_ml: features, data, models, train, evaluate, explain, bundle, inference; reports/
-engine/         sentinel_engine: packets, flows, window rule, risk, pipeline, simulator, sources, bench
+ml/             argus_ml: features, data, models, train, evaluate, explain, bundle, inference; reports/
+engine/         argus_engine: packets, flows, window rule, risk, pipeline, simulator, sources, bench
 data/           README (dataset download/cite), samples/flow_profiles.csv   # raw data gitignored
-models/         sentinel-flow/<version>/ (bundle + checksums, committed)
+models/         argus-flow/<version>/ (bundle + checksums, committed)
 infrastructure/ db/init, prometheus/, grafana/   # each service's Dockerfile lives in its own folder
 tests/          README mapping the per-component test suites
 docs/           ARCHITECTURE, API, ML_METHODOLOGY, SECURITY, PERFORMANCE, TESTING, DEMO, schemas/, images/
@@ -233,7 +233,7 @@ legacy/         NSL-KDD prototype (superseded, reference only)
 | 1 | This document | Reviewed/approved |
 | 2 | Repo skeleton, compose with db/redis/backend stub, `.env.example`, CI (lint, pytest) | `docker compose up` healthy |
 | 3 | Backend: auth/RBAC → DB/migrations → alerts API + state machine → audit → WS | Every endpoint tested (pytest), RBAC matrix tested |
-| 4 | ML: dataset prep, `sentinel_features`, 3 models, CV, metrics report, SHAP, bundle, inference service | Metrics report committed; offline/online feature parity test passes |
+| 4 | ML: dataset prep, `argus_features`, 3 models, CV, metrics report, SHAP, bundle, inference service | Metrics report committed; offline/online feature parity test passes |
 | 5 | Real-time: collector → flow builder → ML → risk → Redis → WS; PCAP replay; simulator | Replay demo raises CRITICAL alert end-to-end; p95 latency measured |
 | 6 | Dashboard on real API/WS, detail page with SHAP, workflow actions | Playwright E2E: login → live alert → ack → resolve |
 | 7 | Notifications (email/Slack/webhook) via transactional outbox + notifier worker, retention | Delivery logged + retried; email verified end to end in CI |
@@ -246,7 +246,7 @@ legacy/         NSL-KDD prototype (superseded, reference only)
 2. **Live vs. dataset distribution shift:** models trained on CIC capture conditions may misfire on a home network. *Mitigation:* feature set restricted to live-computable flow stats, cross-dataset eval, and a PCAP-replay + simulator test in the demo.
 3. **Flow-meter choice:** custom Scapy flow builder (full control, slower) vs. CICFlowMeter (feature-compatible, Java). *Decided:* Scapy builder replicating the CIC feature definitions; validate against CICFlowMeter on a sample PCAP.
 4. **Scope:** Prometheus/Grafana and mitigation are stage-later items; core value is Phases 3–6. *Decided (Phase 7):* no Celery; an asyncio notifier over a PostgreSQL outbox.
-5. **Naming:** repo is `DDoS-System`; *Decided:* product name **SentinelAI**.
+5. **Naming:** repo is `DDoS-System`; *Decided:* product name **Argus**, after the hundred-eyed watcher of Greek myth. It was called SentinelAI until 2026-10-07 and was renamed to avoid confusion with Microsoft Sentinel; Python packages (`argus_ml`, `argus_engine`), the model bundle (`argus-flow`), Redis keys, cookies, headers and database names follow the new name.
 
 ## 14. Limitations (to be stated in README)
 Detection quality is bounded by training data; encrypted/application-layer attacks are only visible via flow statistics; Scapy throughput limits line-rate capture (suitable for lab/small networks); SHAP explains the model, not ground-truth causality; no prevention is claimed.

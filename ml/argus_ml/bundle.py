@@ -19,7 +19,7 @@ import joblib
 import pandas as pd
 from sklearn.pipeline import Pipeline
 
-from sentinel_ml.features import FEATURE_NAMES, FEATURES
+from argus_ml.features import FEATURE_NAMES, FEATURES
 
 MODEL_FILE = "model.joblib"
 BACKGROUND_FILE = "background.joblib"

@@ -6,5 +6,5 @@
 | `benchmark_stack.py` | Measures a running stack: alert-engine ingestion rate, API latency of the dashboard's endpoints, and detection-to-alert latency. Resolves open DDoS alerts on the simulator's web server between trials, so use a test stack. Results: [`docs/PERFORMANCE.md`](../docs/PERFORMANCE.md). |
 
 Model training and the in-process engine benchmark are package commands:
-`python -m sentinel_ml train` (see `ml/README.md`) and
-`python -m sentinel_engine bench` (see `engine/README.md`).
+`python -m argus_ml train` (see `ml/README.md`) and
+`python -m argus_engine bench` (see `engine/README.md`).

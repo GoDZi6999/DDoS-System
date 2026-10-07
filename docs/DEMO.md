@@ -29,7 +29,7 @@ as *False positive* is part of the analyst workflow.
 ## 3. Launch an attack
 
 ```bash
-docker compose exec engine python -m sentinel_engine inject --scenario ddos --duration 30
+docker compose exec engine python -m argus_engine inject --scenario ddos --duration 30
 ```
 
 Within two seconds the red *Attack flows/s* area climbs on the live chart, the
@@ -51,7 +51,7 @@ Open the alert:
   bytes from the server, the server's initial TCP window, packet sizes).
 - **Risk score**: the four signals (model confidence, traffic anomaly, attack
   severity, source reputation) and the total.
-- **Recommended action**: advisory text. SentinelAI detects and alerts; it
+- **Recommended action**: advisory text. Argus detects and alerts; it
   does not block traffic.
 - **Detections**: the latest flows aggregated into the alert.
 
@@ -103,7 +103,7 @@ latency.
 
 ```bash
 docker compose cp capture.pcap engine:/tmp/capture.pcap
-docker compose exec engine python -m sentinel_engine run --source pcap --pcap /tmp/capture.pcap
+docker compose exec engine python -m argus_engine run --source pcap --pcap /tmp/capture.pcap
 ```
 
 See [`engine/README.md`](../engine/README.md) for live capture (needs

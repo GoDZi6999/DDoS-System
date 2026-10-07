@@ -4,18 +4,18 @@ from pathlib import Path
 
 import jsonschema
 import pytest
+from argus_ml.inference import Predictor
 from scapy.layers.inet import IP, TCP
 from scapy.utils import wrpcap
-from sentinel_ml.inference import Predictor
 
-from sentinel_engine.packets import Packet
-from sentinel_engine.pipeline import RULE_PORTSCAN, Engine
-from sentinel_engine.publisher import MemoryPublisher
-from sentinel_engine.simulator import ATTACKS, SCAN_TARGET, Simulator
-from sentinel_engine.sources import pcap_source
+from argus_engine.packets import Packet
+from argus_engine.pipeline import RULE_PORTSCAN, Engine
+from argus_engine.publisher import MemoryPublisher
+from argus_engine.simulator import ATTACKS, SCAN_TARGET, Simulator
+from argus_engine.sources import pcap_source
 
 ROOT = Path(__file__).resolve().parents[2]
-BUNDLE = ROOT / "models" / "sentinel-flow" / "2026.10.03"
+BUNDLE = ROOT / "models" / "argus-flow" / "2026.10.03"
 PROFILES = ROOT / "data" / "samples" / "flow_profiles.csv"
 SCHEMA = json.loads((ROOT / "docs" / "schemas" / "detection.schema.json").read_text())
 T0 = 1_790_000_000.0
@@ -168,7 +168,7 @@ def test_explanations_are_budgeted_per_target_and_second(predictor):
 
 
 def test_candidate_bundle_detects_a_flood():
-    candidate = Predictor.from_bundle(ROOT / "models" / "sentinel-flow" / "2026.10.04")
+    candidate = Predictor.from_bundle(ROOT / "models" / "argus-flow" / "2026.10.04")
     assert candidate.weights.tolist() == [1.0] * len(candidate.bundle.classes)  # argmax
     published = simulate(candidate, "ddos").published
     flood = [d for d in published if d["src_ip"].startswith("198.51.100.")]

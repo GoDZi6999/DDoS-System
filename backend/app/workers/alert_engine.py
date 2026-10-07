@@ -34,8 +34,8 @@ from app.services.notify import mirror_detection_config, publish
 
 logger = logging.getLogger("app.workers.alert_engine")
 
-DETECTIONS_STREAM = "sentinel:detections"
-DEAD_LETTER_STREAM = "sentinel:detections:dead"
+DETECTIONS_STREAM = "argus:detections"
+DEAD_LETTER_STREAM = "argus:detections:dead"
 CONSUMER_GROUP = "alert-engine"
 HEARTBEAT_FILE = Path("/tmp/alert-engine.heartbeat")  # noqa: S108 (container-local health file)
 

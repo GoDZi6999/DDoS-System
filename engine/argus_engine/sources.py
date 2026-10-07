@@ -6,7 +6,7 @@ import time
 from collections.abc import Iterator
 from pathlib import Path
 
-from sentinel_engine.packets import Heartbeat, Packet, from_scapy
+from argus_engine.packets import Heartbeat, Packet, from_scapy
 
 logger = logging.getLogger(__name__)
 

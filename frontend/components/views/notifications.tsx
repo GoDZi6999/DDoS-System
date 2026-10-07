@@ -51,7 +51,7 @@ export function NotificationsView() {
     <>
       <PageHeader
         title="Notifications"
-        description="Alerts are sent to each enabled channel once per severity band, so a flood does not flood your inbox. Messages are advisory; SentinelAI does not block traffic."
+        description="Alerts are sent to each enabled channel once per severity band, so a flood does not flood your inbox. Messages are advisory; Argus does not block traffic."
       />
       <div className="grid gap-4 lg:grid-cols-3">
         <Card className="lg:col-span-2" title="Channels">
@@ -205,7 +205,7 @@ function TargetFields({
       </Field>
       <Field
         label="Signing secret (optional)"
-        hint={editing ? "Leave blank to keep the current secret" : "16+ characters; adds an X-Sentinel-Signature HMAC header"}
+        hint={editing ? "Leave blank to keep the current secret" : "16+ characters; adds an X-Argus-Signature HMAC header"}
       >
         <input type="password" autoComplete="new-password" minLength={16} maxLength={256} value={values.secret ?? ""} onChange={set("secret")} className={inputClass} />
       </Field>

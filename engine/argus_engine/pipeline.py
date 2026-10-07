@@ -19,13 +19,13 @@ from collections.abc import Iterable
 from datetime import UTC, datetime
 from pathlib import Path
 
-from sentinel_ml import features
-from sentinel_ml.inference import Predictor
+from argus_ml import features
+from argus_ml.inference import Predictor
 
-from sentinel_engine.flows import FlowTable
-from sentinel_engine.packets import Heartbeat, Packet
-from sentinel_engine.risk import RiskEngine
-from sentinel_engine.window import PORTSCAN_MIN_PORTS, WindowStats
+from argus_engine.flows import FlowTable
+from argus_engine.packets import Heartbeat, Packet
+from argus_engine.risk import RiskEngine
+from argus_engine.window import PORTSCAN_MIN_PORTS, WindowStats
 
 logger = logging.getLogger(__name__)
 
@@ -263,7 +263,7 @@ class Engine:
 
 
 class _RuleVerdict:
-    """Duck-types sentinel_ml.inference.Prediction for rule-based detections."""
+    """Duck-types argus_ml.inference.Prediction for rule-based detections."""
 
     def __init__(self, label, confidence, class_probs, explanation) -> None:
         self.label = label

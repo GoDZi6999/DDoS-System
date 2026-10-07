@@ -12,7 +12,7 @@ model worse on test (macro-F1 0.817 vs 0.853 with argmax), because refitting
 on the latest part of each run shifts its probabilities. Without a held-out
 set for the refitted model they cannot be tuned reliably, so bundles decide
 by argmax unless asked otherwise.
-Run via `python -m sentinel_ml train`.
+Run via `python -m argus_ml train`.
 """
 
 import json
@@ -27,14 +27,14 @@ from pathlib import Path
 import numpy as np
 import pandas as pd
 
-from sentinel_ml import data, evaluate, models
-from sentinel_ml.bundle import save_bundle
-from sentinel_ml.decision import decide, macro_f1, tune_weights
-from sentinel_ml.explain import Explainer
+from argus_ml import data, evaluate, models
+from argus_ml.bundle import save_bundle
+from argus_ml.decision import decide, macro_f1, tune_weights
+from argus_ml.explain import Explainer
 
 logger = logging.getLogger(__name__)
 
-BUNDLE_NAME = "sentinel-flow"
+BUNDLE_NAME = "argus-flow"
 BACKGROUND_ROWS = 200
 IMPORTANCE_ROWS = 2000
 VALIDATION_FOLD = 4  # temporal_split's folds 0-4: the last fifth of each training run

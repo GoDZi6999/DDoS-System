@@ -1,6 +1,6 @@
 """Inference API used by the real-time ML engine (Phase 5) and the CLI.
 
-predictor = Predictor.from_bundle("models/sentinel-flow/2026.10.03")
+predictor = Predictor.from_bundle("models/argus-flow/2026.10.03")
 for p in predictor.predict(features.from_records(flows)):
     print(p.label, f"{p.confidence:.1%}")   # e.g. "ddos 97.4%"
 """
@@ -11,9 +11,9 @@ from pathlib import Path
 import numpy as np
 import pandas as pd
 
-from sentinel_ml.bundle import Bundle, load_bundle
-from sentinel_ml.decision import decide
-from sentinel_ml.explain import Explainer
+from argus_ml.bundle import Bundle, load_bundle
+from argus_ml.decision import decide
+from argus_ml.explain import Explainer
 
 BENIGN = "benign"
 

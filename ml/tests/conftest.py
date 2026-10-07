@@ -9,7 +9,7 @@ import numpy as np
 import pandas as pd
 import pytest
 
-from sentinel_ml.features import CIC_COLUMNS
+from argus_ml.features import CIC_COLUMNS
 
 # file name -> [(CIC label, rows)]
 FILES = {
@@ -73,7 +73,7 @@ def dataset_dir(tmp_path_factory) -> Path:
 
 @pytest.fixture(scope="session")
 def trained_bundle(dataset_dir, tmp_path_factory) -> Path:
-    from sentinel_ml.train import run
+    from argus_ml.train import run
 
     root = tmp_path_factory.mktemp("artifacts")
     return run(dataset_dir, root / "models", root / "reports", cap=500, tune_decisions=True)

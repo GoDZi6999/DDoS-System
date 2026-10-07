@@ -10,7 +10,7 @@ from pathlib import Path
 import pytest
 
 TEST_DATABASE_URL = os.environ.get(
-    "TEST_DATABASE_URL", "postgresql+asyncpg://sentinel:sentinel@localhost:5432/sentinel_test"
+    "TEST_DATABASE_URL", "postgresql+asyncpg://argus:argus@localhost:5432/argus_test"
 )
 TEST_REDIS_URL = os.environ.get("TEST_REDIS_URL", "redis://localhost:6379/15")
 

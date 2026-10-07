@@ -14,7 +14,7 @@ export function attackName(label: string): string {
   return ATTACKS[label] ?? label.replace(/_/g, " ").replace(/^\w/, (c) => c.toUpperCase());
 }
 
-// Mirrors ml/sentinel_ml/features.py (client = forward, server = backward).
+// Mirrors ml/argus_ml/features.py (client = forward, server = backward).
 const FEATURES: Record<string, string> = {
   flow_duration_s: "Flow duration",
   fwd_packets: "Packets from client",

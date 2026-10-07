@@ -4,7 +4,7 @@ import { AlertDetailView } from "@/components/views/alert-detail";
 
 export async function generateMetadata({ params }: PageProps<"/alerts/[id]">): Promise<Metadata> {
   const { id } = await params;
-  return { title: `Alert #${id} · SentinelAI` };
+  return { title: `Alert #${id} · Argus` };
 }
 
 export default async function AlertPage({ params }: PageProps<"/alerts/[id]">) {

@@ -11,4 +11,4 @@ guide, with what each layer proves and how to run it, is
 | Real-time engine (flows, rules, risk, contract) | `engine/tests/` | the committed model bundle |
 | Stack smoke test | `scripts/smoke_test.sh` | `docker compose up` |
 | Dashboard end to end (Playwright) | `frontend/e2e/` | `docker compose up` |
-| Benchmarks | `python -m sentinel_engine bench`, `scripts/benchmark_stack.py` | in process / running stack |
+| Benchmarks | `python -m argus_engine bench`, `scripts/benchmark_stack.py` | in process / running stack |

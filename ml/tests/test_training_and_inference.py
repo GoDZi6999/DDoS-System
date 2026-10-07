@@ -3,10 +3,10 @@ import shutil
 
 import pytest
 
-from sentinel_ml import bundle, data, features, models
-from sentinel_ml.__main__ import main
-from sentinel_ml.explain import Explainer
-from sentinel_ml.inference import Predictor
+from argus_ml import bundle, data, features, models
+from argus_ml.__main__ import main
+from argus_ml.explain import Explainer
+from argus_ml.inference import Predictor
 
 
 def test_training_writes_a_complete_bundle_and_report(trained_bundle):
@@ -119,7 +119,7 @@ def test_every_candidate_can_be_explained(name, dataset_dir):
 def test_decision_weights_raise_the_bar_for_unsure_attacks():
     import numpy as np
 
-    from sentinel_ml.decision import decide, tune_weights
+    from argus_ml.decision import decide, tune_weights
 
     # Benign is 0.55-likely for the noisy rows; the botnet-ish rows are real.
     proba = np.array([[0.45, 0.55], [0.40, 0.60], [0.05, 0.95], [0.02, 0.98]])

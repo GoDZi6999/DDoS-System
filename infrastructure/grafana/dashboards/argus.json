@@ -1,8 +1,8 @@
 {
-  "uid": "sentinelai-overview",
-  "title": "SentinelAI",
+  "uid": "argus-overview",
+  "title": "Argus",
   "tags": [
-    "sentinelai"
+    "argus"
   ],
   "timezone": "browser",
   "refresh": "30s",
@@ -32,7 +32,7 @@
       },
       "targets": [
         {
-          "expr": "sentinel_open_alerts",
+          "expr": "argus_open_alerts",
           "legendFormat": "{{severity}}",
           "instant": true,
           "datasource": {
@@ -141,7 +141,7 @@
       },
       "targets": [
         {
-          "expr": "sentinel_detection_stream",
+          "expr": "argus_detection_stream",
           "legendFormat": "{{state}}",
           "instant": true,
           "datasource": {
@@ -186,7 +186,7 @@
       },
       "targets": [
         {
-          "expr": "sentinel_flows_last_5m{class=\"benign\"} / 300",
+          "expr": "argus_flows_last_5m{class=\"benign\"} / 300",
           "legendFormat": "Benign flows/s",
           "datasource": {
             "type": "prometheus",
@@ -195,7 +195,7 @@
           "refId": "A"
         },
         {
-          "expr": "sentinel_flows_last_5m{class=\"attack\"} / 300",
+          "expr": "argus_flows_last_5m{class=\"attack\"} / 300",
           "legendFormat": "Attack flows/s",
           "datasource": {
             "type": "prometheus",
@@ -280,7 +280,7 @@
       },
       "targets": [
         {
-          "expr": "sentinel_notification_deliveries_24h",
+          "expr": "argus_notification_deliveries_24h",
           "legendFormat": "{{status}}",
           "instant": true,
           "datasource": {
@@ -391,7 +391,7 @@
       },
       "targets": [
         {
-          "expr": "sum(sentinel_detection_stream{state=~\"lag|pending\"})",
+          "expr": "sum(argus_detection_stream{state=~\"lag|pending\"})",
           "legendFormat": "Detections waiting",
           "datasource": {
             "type": "prometheus",
@@ -443,7 +443,7 @@
       },
       "targets": [
         {
-          "expr": "sum by (status) (rate(sentinel_http_requests_total[5m]))",
+          "expr": "sum by (status) (rate(argus_http_requests_total[5m]))",
           "legendFormat": "{{status}}",
           "datasource": {
             "type": "prometheus",
@@ -543,7 +543,7 @@
       },
       "targets": [
         {
-          "expr": "topk(5, histogram_quantile(0.95, sum by (le, route) (rate(sentinel_http_request_duration_seconds_bucket[5m]))))",
+          "expr": "topk(5, histogram_quantile(0.95, sum by (le, route) (rate(argus_http_request_duration_seconds_bucket[5m]))))",
           "legendFormat": "{{route}}",
           "datasource": {
             "type": "prometheus",
@@ -581,5 +581,5 @@
       }
     }
   ],
-  "description": "SentinelAI pipeline and API health. Detection quality is on the SOC dashboard; this is operations."
+  "description": "Argus pipeline and API health. Detection quality is on the SOC dashboard; this is operations."
 }

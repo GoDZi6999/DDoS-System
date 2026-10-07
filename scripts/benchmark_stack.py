@@ -134,7 +134,7 @@ def resolve_open_alerts(client: Client) -> None:
 def alert_latency(client: Client) -> float:
     resolve_open_alerts(client)
     known = {a["id"] for a in client.get(f"/alerts?ip={TARGET}&attack_type=ddos&limit=200")["items"]}
-    compose("engine", "python", "-m", "sentinel_engine", "inject", "--scenario", "ddos", "--duration", "5")
+    compose("engine", "python", "-m", "argus_engine", "inject", "--scenario", "ddos", "--duration", "5")
     for _ in range(100):
         fresh = [
             a for a in client.get(f"/alerts?ip={TARGET}&attack_type=ddos&limit=200")["items"]

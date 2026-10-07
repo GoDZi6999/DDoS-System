@@ -1,8 +1,8 @@
 import type { Metadata } from "next";
-import { ShieldIcon } from "@/components/icons";
+import { EyeIcon } from "@/components/icons";
 import { LoginForm } from "./login-form";
 
-export const metadata: Metadata = { title: "Sign in · SentinelAI" };
+export const metadata: Metadata = { title: "Sign in · Argus" };
 
 function Radar() {
   return (
@@ -51,7 +51,7 @@ export default async function LoginPage({ searchParams }: PageProps<"/login">) {
             </h2>
             <p className="mt-3 text-sm text-ink-2">
               Real-time classification of network flows with an explainable model, risk scoring
-              and a SOC workflow. Detection and alerting only: SentinelAI never blocks traffic.
+              and a SOC workflow. Detection and alerting only: Argus never blocks traffic.
             </p>
           </div>
         </div>
@@ -73,11 +73,11 @@ export default async function LoginPage({ searchParams }: PageProps<"/login">) {
         <div className="w-full max-w-sm">
           <div className="mb-8 flex items-center gap-3">
             <span className="grid size-11 place-items-center rounded-sm border border-accent/50 bg-accent/10 text-accent shadow-[0_0_24px_-6px_var(--accent)]">
-              <ShieldIcon className="size-6" />
+              <EyeIcon className="size-6" />
             </span>
             <div>
               <p className="font-display text-xl font-bold tracking-[0.18em] text-ink">
-                SENTINEL<span className="text-accent">{"//"}</span>AI
+                AR<span className="text-accent">GUS</span>
               </p>
               <p className="label-caps text-muted">SOC console</p>
             </div>

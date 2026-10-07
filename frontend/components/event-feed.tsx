@@ -18,7 +18,7 @@ export function EventFeed() {
     >
       {feed.length === 0 ? (
         <p className="text-muted">
-          <span className="text-accent">sentinel@soc</span>:~$ tail -f alerts
+          <span className="text-accent">argus@soc</span>:~$ tail -f alerts
           <br />
           {status === "live" ? "waiting for alert events" : "connecting to live feed"}
           <span aria-hidden className="ml-0.5 inline-block w-2 animate-pulse bg-accent">

@@ -10,7 +10,7 @@ from pathlib import Path
 
 import pandas as pd
 
-from sentinel_ml import data
+from argus_ml import data
 
 DEFAULT_PER_CLASS = {"benign": 2000}
 PER_CLASS = 300

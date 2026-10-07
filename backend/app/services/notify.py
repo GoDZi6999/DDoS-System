@@ -9,9 +9,9 @@ from redis.exceptions import RedisError
 
 logger = logging.getLogger(__name__)
 
-EVENTS_CHANNEL = "sentinel:events"
+EVENTS_CHANNEL = "argus:events"
 # Current detection settings, mirrored from the database for the real-time engine.
-CONFIG_KEY = "sentinel:config:detection"
+CONFIG_KEY = "argus:config:detection"
 
 
 async def publish(redis: Redis, event_type: str, data: dict[str, Any]) -> None:

@@ -42,7 +42,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
 
 
 def create_app() -> FastAPI:
-    app = FastAPI(title="SentinelAI API", version=__version__, lifespan=lifespan)
+    app = FastAPI(title="Argus API", version=__version__, lifespan=lifespan)
     app.include_router(health.router)
     app.include_router(api_v1_router)
     if get_settings().metrics_enabled:

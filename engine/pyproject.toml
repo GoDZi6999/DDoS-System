@@ -12,7 +12,7 @@ select = ["E", "W", "F", "I", "B", "UP", "S", "RUF"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
-# sentinel_ml (shared features + inference) lives in ../ml.
+# argus_ml (shared features + inference) lives in ../ml.
 pythonpath = [".", "../ml"]
 addopts = "-ra"
 filterwarnings = ["ignore::PendingDeprecationWarning:shap.*"]

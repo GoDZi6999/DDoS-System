@@ -16,13 +16,13 @@ COPY ml/requirements.txt ml/requirements.txt
 COPY engine/requirements.txt engine/requirements.txt
 RUN pip install -r engine/requirements.txt
 
-COPY ml/sentinel_ml ml/sentinel_ml
-COPY engine/sentinel_engine engine/sentinel_engine
-COPY models/sentinel-flow/2026.10.03 models/sentinel-flow/2026.10.03
+COPY ml/argus_ml ml/argus_ml
+COPY engine/argus_engine engine/argus_engine
+COPY models/argus-flow/2026.10.03 models/argus-flow/2026.10.03
 # Candidate model (opt-in with MODEL_BUNDLE); see ml/reports/2026.10.04.
-COPY models/sentinel-flow/2026.10.04 models/sentinel-flow/2026.10.04
+COPY models/argus-flow/2026.10.04 models/argus-flow/2026.10.04
 COPY data/samples/flow_profiles.csv data/samples/flow_profiles.csv
 
 USER app
 # Default: simulated lab traffic. ENGINE_SCENARIO=demo cycles through attacks.
-CMD ["sh", "-c", "exec python -m sentinel_engine run --source simulate --scenario \"${ENGINE_SCENARIO:-normal}\" --loop"]
+CMD ["sh", "-c", "exec python -m argus_engine run --source simulate --scenario \"${ENGINE_SCENARIO:-normal}\" --loop"]

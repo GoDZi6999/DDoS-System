@@ -1,6 +1,6 @@
 # Backend (FastAPI)
 
-REST + WebSocket API and the background workers (alert engine, notifier) for SentinelAI. API
+REST + WebSocket API and the background workers (alert engine, notifier) for Argus. API
 reference: [`docs/API.md`](../docs/API.md); security controls:
 [`docs/SECURITY.md`](../docs/SECURITY.md).
 
@@ -9,8 +9,8 @@ The same image runs four ways in `docker-compose.yml`:
 | Service | Command | Role |
 |---|---|---|
 | `migrate` | `alembic upgrade head && python -m app.cli bootstrap` | One-shot, as the schema owner: migrations + first admin |
-| `backend` | `uvicorn app.main:app` | API, as the least-privilege `sentinel_app` role |
-| `alert-engine` | `python -m app.workers.alert_engine` | Consumes `sentinel:detections` from Redis, stores events, raises alerts, queues notifications |
+| `backend` | `uvicorn app.main:app` | API, as the least-privilege `argus_app` role |
+| `alert-engine` | `python -m app.workers.alert_engine` | Consumes `argus:detections` from Redis, stores events, raises alerts, queues notifications |
 | `notifier` | `python -m app.workers.notifier` | Sends queued notifications (email, Slack, webhook) with retries; applies data retention every 6 h |
 
 ## Run locally (without Docker)
@@ -34,12 +34,12 @@ python -m app.workers.notifier           # optional: notifications + retention
 
 The suite runs against real PostgreSQL and Redis (the schema uses INET,
 JSONB, triggers and advisory locks). It creates and migrates its own database,
-`sentinel_test`, and uses Redis database 15.
+`argus_test`, and uses Redis database 15.
 
 ```bash
-docker run -d --name sentinel-test-pg -p 127.0.0.1:5432:5432 \
-  -e POSTGRES_USER=sentinel -e POSTGRES_PASSWORD=sentinel -e POSTGRES_DB=sentinel postgres:16-alpine
-docker run -d --name sentinel-test-redis -p 127.0.0.1:6379:6379 redis:7-alpine
+docker run -d --name argus-test-pg -p 127.0.0.1:5432:5432 \
+  -e POSTGRES_USER=argus -e POSTGRES_PASSWORD=argus -e POSTGRES_DB=argus postgres:16-alpine
+docker run -d --name argus-test-redis -p 127.0.0.1:6379:6379 redis:7-alpine
 
 pytest                                   # TEST_DATABASE_URL / TEST_REDIS_URL to override
 ruff check . && ruff format --check .

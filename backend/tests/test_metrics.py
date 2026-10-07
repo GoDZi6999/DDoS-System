@@ -17,11 +17,11 @@ def test_metrics_expose_pipeline_state_and_request_timings(client, viewer_header
 
     assert response.status_code == 200
     text = response.text
-    assert _value(text, 'sentinel_open_alerts{severity="CRITICAL"}') == 1
-    assert _value(text, 'sentinel_open_alerts{severity="LOW"}') == 0
-    assert _value(text, 'sentinel_flows_last_5m{class="attack"}') == 1
-    assert _value(text, 'sentinel_flows_last_5m{class="benign"}') == 1
-    assert 'sentinel_detection_stream{state="lag"}' in text
+    assert _value(text, 'argus_open_alerts{severity="CRITICAL"}') == 1
+    assert _value(text, 'argus_open_alerts{severity="LOW"}') == 0
+    assert _value(text, 'argus_flows_last_5m{class="attack"}') == 1
+    assert _value(text, 'argus_flows_last_5m{class="benign"}') == 1
+    assert 'argus_detection_stream{state="lag"}' in text
     # Routes are labelled by template, never by raw path (bounded cardinality).
     assert 'route="/api/v1/alerts/{alert_id}"' in text
     assert f'route="/api/v1/alerts/{alert.id}"' not in text

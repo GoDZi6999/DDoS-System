@@ -35,46 +35,44 @@ REGISTRY = CollectorRegistry()
 ProcessCollector(registry=REGISTRY)
 
 REQUESTS = Counter(
-    "sentinel_http_requests",
+    "argus_http_requests",
     "API requests by route template, method and status class",
     ["route", "method", "status"],
     registry=REGISTRY,
 )
 LATENCY = Histogram(
-    "sentinel_http_request_duration_seconds",
+    "argus_http_request_duration_seconds",
     "API request duration by route template",
     ["route"],
     buckets=(0.005, 0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1, 2.5, 5),
     registry=REGISTRY,
 )
-OPEN_ALERTS = Gauge(
-    "sentinel_open_alerts", "Open alerts by severity", ["severity"], registry=REGISTRY
-)
+OPEN_ALERTS = Gauge("argus_open_alerts", "Open alerts by severity", ["severity"], registry=REGISTRY)
 FLOWS = Gauge(
-    "sentinel_flows_last_5m",
+    "argus_flows_last_5m",
     "Flows analysed in the last 5 minutes, by class",
     ["class"],
     registry=REGISTRY,
 )
 DELIVERIES = Gauge(
-    "sentinel_notification_deliveries_24h",
+    "argus_notification_deliveries_24h",
     "Notification deliveries queued in the last 24 hours, by status",
     ["status"],
     registry=REGISTRY,
 )
 STREAM = Gauge(
-    "sentinel_detection_stream",
+    "argus_detection_stream",
     "Detection stream: entries not yet read (lag), read but unacknowledged "
     "(pending), and dead-lettered",
     ["state"],
     registry=REGISTRY,
 )
 SCRAPE_ERRORS = Counter(
-    "sentinel_metrics_scrape_errors", "Pipeline gauges that could not be read", registry=REGISTRY
+    "argus_metrics_scrape_errors", "Pipeline gauges that could not be read", registry=REGISTRY
 )
 
-DETECTIONS_STREAM = "sentinel:detections"
-DEAD_LETTER_STREAM = "sentinel:detections:dead"
+DETECTIONS_STREAM = "argus:detections"
+DEAD_LETTER_STREAM = "argus:detections:dead"
 CONSUMER_GROUP = "alert-engine"
 QUERY_TIMEOUT_S = 3.0
 

@@ -1,4 +1,4 @@
-# Real-time engine (`sentinel_engine`)
+# Real-time engine (`argus_engine`)
 
 Turns traffic into risk-scored detections for the alert engine:
 
@@ -6,10 +6,10 @@ Turns traffic into risk-scored detections for the alert engine:
 live capture / PCAP replay / simulator
    -> flow builder (flows.py)              packets -> bidirectional flows -> 37 features
    -> window stats (window.py)             cross-flow behaviour over 10 s
-   -> classifier (sentinel_ml Predictor)   label, confidence, SHAP explanation
+   -> classifier (argus_ml Predictor)   label, confidence, SHAP explanation
    -> port-scan rule (pipeline.py)         >= 20 distinct ports from one source in 10 s
    -> risk engine (risk.py)                0-100 score with its four components
-   -> Redis: sentinel:detections stream (alert engine), traffic.tick events (dashboards)
+   -> Redis: argus:detections stream (alert engine), traffic.tick events (dashboards)
 ```
 
 Detections follow the contract in [`docs/schemas/detection.schema.json`](../docs/schemas/detection.schema.json);
@@ -19,20 +19,20 @@ the tests validate the engine's output against it.
 
 | Source | Command | Notes |
 |---|---|---|
-| Simulator (default) | `python -m sentinel_engine run --source simulate --scenario normal --loop` | Sends nothing on any network. Benign and attack flows replay **real held-out CIC-IDS2017 flow statistics** (`data/samples/flow_profiles.csv`) with lab addresses; port scans are generated as packets and go through the flow builder. |
+| Simulator (default) | `python -m argus_engine run --source simulate --scenario normal --loop` | Sends nothing on any network. Benign and attack flows replay **real held-out CIC-IDS2017 flow statistics** (`data/samples/flow_profiles.csv`) with lab addresses; port scans are generated as packets and go through the flow builder. |
 | Demo story | `--scenario demo --loop` (or `ENGINE_SCENARIO=demo docker compose up`) | normal → DDoS ramp → normal → port scan → DoS → brute force → web attack → botnet, ~6.5 min per cycle. |
-| One attack burst | `python -m sentinel_engine inject --scenario ddos --duration 20` | Also `dos`, `portscan`, `bruteforce`, `webattack`, `botnet`. |
-| PCAP replay | `python -m sentinel_engine run --source pcap --pcap capture.pcap --speed 2` | Timestamps are shifted to "now" unless `--no-retime`. |
-| Live capture | `sudo python -m sentinel_engine run --source live --interface eth0 [--filter "tcp or udp"]` | Read-only sniffing; needs `CAP_NET_RAW`. Run it on the host whose traffic you want to see, with `REDIS_URL` pointing at the stack's Redis. |
+| One attack burst | `python -m argus_engine inject --scenario ddos --duration 20` | Also `dos`, `portscan`, `bruteforce`, `webattack`, `botnet`. |
+| PCAP replay | `python -m argus_engine run --source pcap --pcap capture.pcap --speed 2` | Timestamps are shifted to "now" unless `--no-retime`. |
+| Live capture | `sudo python -m argus_engine run --source live --interface eth0 [--filter "tcp or udp"]` | Read-only sniffing; needs `CAP_NET_RAW`. Run it on the host whose traffic you want to see, with `REDIS_URL` pointing at the stack's Redis. |
 
-Environment: `REDIS_URL`, `MODEL_BUNDLE` (default `models/sentinel-flow/2026.10.03`; the
-opt-in candidate is `models/sentinel-flow/2026.10.04`),
+Environment: `REDIS_URL`, `MODEL_BUNDLE` (default `models/argus-flow/2026.10.03`; the
+opt-in candidate is `models/argus-flow/2026.10.04`),
 `FLOW_PROFILES` (default `data/samples/flow_profiles.csv`).
 
 With Docker Compose the engine runs in the `engine` service:
 
 ```bash
-docker compose exec engine python -m sentinel_engine inject --scenario portscan --duration 20
+docker compose exec engine python -m argus_engine inject --scenario portscan --duration 20
 ```
 
 ## Risk score
@@ -52,7 +52,7 @@ which the API mirrors to Redis; the engine re-reads them every 10 s. Benign flow
 ## Performance
 
 ```bash
-python -m sentinel_engine bench          # needs no Redis; prints a Markdown report
+python -m argus_engine bench          # needs no Redis; prints a Markdown report
 ```
 
 On a 4-core VM: ~4.7 ms per benign flow and ~11 ms per attack flow when

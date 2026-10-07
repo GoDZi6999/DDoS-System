@@ -19,7 +19,7 @@ from sklearn.metrics import (
 )
 from sklearn.pipeline import Pipeline
 
-from sentinel_ml.decision import decide, expected_calibration_error
+from argus_ml.decision import decide, expected_calibration_error
 
 BENIGN_INDEX = 0  # data.CLASSES[0] == "benign"
 

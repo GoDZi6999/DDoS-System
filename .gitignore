@@ -33,10 +33,10 @@ models/*
 !models/README.md
 # The current bundle is small (~2 MB) and committed so a fresh clone can run
 # inference without the dataset; older or experimental bundles stay local.
-!models/sentinel-flow/
-models/sentinel-flow/*
-!models/sentinel-flow/2026.10.03/
-!models/sentinel-flow/2026.10.04/
+!models/argus-flow/
+models/argus-flow/*
+!models/argus-flow/2026.10.03/
+!models/argus-flow/2026.10.04/
 
 # --- Generated output --------------------------------------------------------
 logs/

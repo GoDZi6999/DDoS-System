@@ -50,7 +50,7 @@ export async function send<T>(
 ): Promise<T> {
   const response = await fetch(`/api/backend/${path}`, {
     method,
-    headers: { "Content-Type": "application/json", "x-sentinel-csrf": "1" },
+    headers: { "Content-Type": "application/json", "x-argus-csrf": "1" },
     body: body === undefined ? undefined : JSON.stringify(body),
   });
   return parse<T>(response);

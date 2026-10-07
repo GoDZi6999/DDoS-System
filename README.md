@@ -1,8 +1,8 @@
-# SentinelAI
+# Argus
 
 **Real-time AI-powered network threat detection and SOC platform.**
 
-SentinelAI classifies network flows in real time with an explainable model,
+Argus classifies network flows in real time with an explainable model,
 scores their risk and raises alerts that analysts work through a SOC-style
 workflow, with notifications and a tamper-resistant audit trail. It
 **detects and alerts; it does not block traffic**. Its recommended actions are
@@ -52,6 +52,11 @@ traffic: simulator | PCAP replay | live capture
 
 Requires Docker with Compose v2.
 
+> **Ran it before the rename?** The project was called SentinelAI until
+> 2026-10-07. The Compose project, database and Redis names changed, so
+> remove the old stack and its data once:
+> `docker compose -p sentinelai down -v`.
+
 ```bash
 git clone https://github.com/GoDZi6999/DDoS-System.git && cd DDoS-System
 docker compose up --build -d --wait
@@ -67,7 +72,7 @@ docker compose logs migrate      # first start: the generated admin password, sh
 Then simulate an attack and watch it arrive on the dashboard:
 
 ```bash
-docker compose exec engine python -m sentinel_engine inject --scenario ddos --duration 30
+docker compose exec engine python -m argus_engine inject --scenario ddos --duration 30
 ```
 
 The [demo walkthrough](docs/DEMO.md) covers the rest: investigating an
@@ -126,7 +131,7 @@ rate validated on the target network.
 ```
 backend/          FastAPI API, alert engine and notifier workers, migrations, tests
 frontend/         Next.js SOC dashboard (backend-for-frontend), Playwright E2E
-ml/               sentinel_ml: shared features, training, evaluation, SHAP, inference
+ml/               argus_ml: shared features, training, evaluation, SHAP, inference
 engine/           real-time engine: simulator / PCAP / live capture, flows, rules, risk
 models/           versioned model bundle (committed, ~2 MB, checksum-verified)
 data/             dataset instructions and the simulator's flow profiles (no raw data)
@@ -138,7 +143,7 @@ legacy/           original NSL-KDD + Flask prototype, superseded, kept for refer
 
 ## Limitations
 
-Read these before relying on SentinelAI:
+Read these before relying on Argus:
 
 - **One training dataset.** All model numbers come from CIC-IDS2017, a lab
   capture. Expect lower accuracy on other networks until the model is
@@ -171,5 +176,5 @@ of derived flow profiles for the simulator.
 ## Legacy prototype
 
 The original NSL-KDD + Flask prototype in [`legacy/`](legacy/README.md) is
-superseded by SentinelAI and kept only for reference; nothing in the stack
+superseded by Argus and kept only for reference; nothing in the stack
 uses it.

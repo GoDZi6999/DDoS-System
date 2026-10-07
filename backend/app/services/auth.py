@@ -66,8 +66,8 @@ class LoginThrottle:
     @staticmethod
     def _keys(username: str, ip: str | None) -> dict[str, str]:
         return {
-            "user": f"sentinel:login-failures:user:{username}",
-            "ip": f"sentinel:login-failures:ip:{ip or 'unknown'}",
+            "user": f"argus:login-failures:user:{username}",
+            "ip": f"argus:login-failures:ip:{ip or 'unknown'}",
         }
 
     async def retry_after(self, username: str, ip: str | None) -> int | None:

@@ -1,7 +1,7 @@
 """Load, clean and split CIC-IDS2017 (MachineLearningCVE CSVs).
 
 Cleaning (each step is counted in the returned report):
-1. strip column names, normalise labels, map them to SentinelAI classes;
+1. strip column names, normalise labels, map them to Argus classes;
    classes too rare to learn (Infiltration, Heartbleed) are dropped;
 2. drop rows with a negative flow duration (CICFlowMeter bug);
 3. drop exact duplicates, and every copy of a feature vector that appears
@@ -22,11 +22,11 @@ from pathlib import Path
 import numpy as np
 import pandas as pd
 
-from sentinel_ml.features import CIC_COLUMNS, FEATURE_NAMES, from_cic
+from argus_ml.features import CIC_COLUMNS, FEATURE_NAMES, from_cic
 
 TRAIN_FRACTION = 0.7
 
-# CIC label (normalised: lowercase, non-alphanumerics collapsed) -> SentinelAI class.
+# CIC label (normalised: lowercase, non-alphanumerics collapsed) -> Argus class.
 LABEL_MAP = {
     "benign": "benign",
     "ddos": "ddos",
@@ -54,7 +54,7 @@ def normalise_label(raw: str) -> str:
 @dataclass
 class Dataset:
     features: pd.DataFrame  # columns = FEATURE_NAMES
-    labels: pd.Series  # SentinelAI class names
+    labels: pd.Series  # Argus class names
     groups: pd.Series  # "<file>|<original label>", used for splitting
     report: dict = field(default_factory=dict)
 

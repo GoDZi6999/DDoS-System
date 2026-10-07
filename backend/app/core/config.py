@@ -16,7 +16,7 @@ class Settings(BaseSettings):
 
     # Defaults point at services on localhost for running outside Docker;
     # docker-compose.yml overrides them with the in-network hostnames.
-    database_url: str = "postgresql+asyncpg://sentinel:sentinel@localhost:5432/sentinel"
+    database_url: str = "postgresql+asyncpg://argus:argus@localhost:5432/argus"
     redis_url: str = "redis://localhost:6379/0"
 
     # HS256 signing key (32+ characters). Required in production; without it a
@@ -44,7 +44,7 @@ class Settings(BaseSettings):
     smtp_security: Literal["starttls", "tls", "none"] = "starttls"
     smtp_username: str | None = None
     smtp_password: SecretStr | None = None
-    smtp_from: str = "SentinelAI <sentinelai@localhost>"
+    smtp_from: str = "Argus <argus@localhost>"
     # Base URL of the dashboard, for links in notifications.
     dashboard_url: str = "http://localhost:3000"
     # Webhook and Slack targets must be public HTTPS addresses. Allow private

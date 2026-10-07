@@ -238,7 +238,7 @@ def test_webhook_delivery_is_signed(client, admin_headers):
         admin_headers,
         name="hook",
         kind="webhook",
-        config={"url": "https://receiver.example.com/sentinel", "secret": secret},
+        config={"url": "https://receiver.example.com/argus", "secret": secret},
     )
     ingest(client, risk_score=90)
     received: list[httpx2.Request] = []
@@ -252,12 +252,12 @@ def test_webhook_delivery_is_signed(client, admin_headers):
 
     (request,) = received
     body = request.content
-    timestamp = request.headers["x-sentinel-timestamp"]
-    assert request.headers["x-sentinel-signature"] == signature(secret, timestamp, body)
-    assert request.headers["x-sentinel-event"] == "alert.created"
+    timestamp = request.headers["x-argus-timestamp"]
+    assert request.headers["x-argus-signature"] == signature(secret, timestamp, body)
+    assert request.headers["x-argus-event"] == "alert.created"
     document = json.loads(body)
     assert document["alert"]["severity"] == "CRITICAL"
-    assert document["delivery_id"] == int(request.headers["x-sentinel-delivery"])
+    assert document["delivery_id"] == int(request.headers["x-argus-delivery"])
 
     (delivery,) = deliveries(client)
     assert (delivery.status, delivery.attempts) == (DeliveryStatus.SENT, 1)
@@ -321,13 +321,13 @@ def test_email_is_sent_through_smtp(client, admin_headers, monkeypatch):
     make_channel(client, admin_headers, config={"recipients": ["a@example.com", "b@example.com"]})
     ingest(client, risk_score=90)
 
-    process(client, smtp_host="mail.example.com", smtp_from="SentinelAI <soc@example.com>")
+    process(client, smtp_host="mail.example.com", smtp_from="Argus <soc@example.com>")
 
     (message,) = sent
     assert message["To"] == "a@example.com, b@example.com"
     assert message["Subject"].startswith("[CRITICAL] new alert: DDoS detected")
     body = message.get_content()
-    assert "Recommended action (advisory; SentinelAI does not block traffic)" in body
+    assert "Recommended action (advisory; Argus does not block traffic)" in body
     assert "/alerts/1" in body
     assert deliveries(client)[0].status == DeliveryStatus.SENT
 
@@ -387,7 +387,7 @@ def test_slack_message_escapes_markup():
     }
     body = json.dumps(slack_body(payload))
     assert "<script>" not in body and "&lt;script&gt; &amp; co" in body
-    assert "<http://localhost:3000/alerts/1|Open in SentinelAI>" in body
+    assert "<http://localhost:3000/alerts/1|Open in Argus>" in body
 
 
 # --- retention ---------------------------------------------------------------

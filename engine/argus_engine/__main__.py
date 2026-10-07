@@ -1,10 +1,10 @@
 """Command line:
 
-    python -m sentinel_engine run --source simulate --scenario demo --loop
-    python -m sentinel_engine run --source pcap --pcap capture.pcap --speed 2
-    python -m sentinel_engine run --source live --interface eth0     (needs CAP_NET_RAW)
-    python -m sentinel_engine inject --scenario ddos --duration 20   (attack burst only)
-    python -m sentinel_engine bench                                   (in-process benchmark)
+    python -m argus_engine run --source simulate --scenario demo --loop
+    python -m argus_engine run --source pcap --pcap capture.pcap --speed 2
+    python -m argus_engine run --source live --interface eth0     (needs CAP_NET_RAW)
+    python -m argus_engine inject --scenario ddos --duration 20   (attack burst only)
+    python -m argus_engine bench                                   (in-process benchmark)
 
 Environment: REDIS_URL, MODEL_BUNDLE, FLOW_PROFILES.
 """
@@ -15,15 +15,15 @@ import os
 import sys
 from pathlib import Path
 
-from sentinel_engine.simulator import SCENARIOS
+from argus_engine.simulator import SCENARIOS
 
-DEFAULT_BUNDLE = "models/sentinel-flow/2026.10.03"
+DEFAULT_BUNDLE = "models/argus-flow/2026.10.03"
 DEFAULT_PROFILES = "data/samples/flow_profiles.csv"
-HEARTBEAT_FILE = Path("/tmp/sentinel-engine.heartbeat")  # noqa: S108 (container-local)
+HEARTBEAT_FILE = Path("/tmp/argus-engine.heartbeat")  # noqa: S108 (container-local)
 
 
 def main(argv: list[str] | None = None) -> int:
-    parser = argparse.ArgumentParser(prog="python -m sentinel_engine")
+    parser = argparse.ArgumentParser(prog="python -m argus_engine")
     commands = parser.add_subparsers(dest="command", required=True)
 
     run = commands.add_parser("run", help="run the real-time engine")
@@ -49,7 +49,7 @@ def main(argv: list[str] | None = None) -> int:
 
     args = parser.parse_args(argv)
     if args.command == "bench":
-        from sentinel_engine.bench import main as bench_main
+        from argus_engine.bench import main as bench_main
 
         return bench_main(
             os.environ.get("MODEL_BUNDLE", DEFAULT_BUNDLE),
@@ -59,11 +59,11 @@ def main(argv: list[str] | None = None) -> int:
         )
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s %(message)s")
 
-    from sentinel_ml.inference import Predictor
+    from argus_ml.inference import Predictor
 
-    from sentinel_engine.pipeline import Engine
-    from sentinel_engine.publisher import RedisPublisher
-    from sentinel_engine.simulator import Simulator
+    from argus_engine.pipeline import Engine
+    from argus_engine.publisher import RedisPublisher
+    from argus_engine.simulator import Simulator
 
     predictor = Predictor.from_bundle(os.environ.get("MODEL_BUNDLE", DEFAULT_BUNDLE))
     publisher = RedisPublisher(os.environ.get("REDIS_URL", "redis://localhost:6379/0"))
@@ -82,14 +82,14 @@ def main(argv: list[str] | None = None) -> int:
         )
         kind = "sim"
     elif args.source == "pcap":
-        from sentinel_engine.sources import pcap_source
+        from argus_engine.sources import pcap_source
 
         if args.pcap is None:
             parser.error("--pcap is required with --source pcap")
         source = pcap_source(args.pcap, speed=args.speed, retime=not args.no_retime)
         kind = "pcap"
     else:
-        from sentinel_engine.sources import live_source
+        from argus_engine.sources import live_source
 
         source = live_source(args.interface, args.filter)
         kind = "live"

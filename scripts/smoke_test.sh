@@ -34,7 +34,7 @@ grep -q '"status":"ready"' <<<"$ready" || fail "a backend dependency is down"
 
 echo "-> backend metrics    $BACKEND_URL/metrics"
 metrics="$(curl -fsS "$BACKEND_URL/metrics")" || fail "metrics endpoint unreachable"
-grep -q '^sentinel_open_alerts{severity="CRITICAL"}' <<<"$metrics" || fail "pipeline gauges missing from /metrics"
+grep -q '^argus_open_alerts{severity="CRITICAL"}' <<<"$metrics" || fail "pipeline gauges missing from /metrics"
 
 echo "-> frontend status    $FRONTEND_URL/status"
 page="$(curl -fsS "$FRONTEND_URL/status")" || fail "frontend unreachable"
@@ -90,7 +90,7 @@ target="10.20.0.10"  # the simulator's web server
 open_query="$BACKEND_URL/api/v1/alerts?ip=$target&attack_type=ddos&status=NEW&status=INVESTIGATING&status=CONTAINED"
 already_open="$(curl -fsS "${auth[@]}" "$open_query" | json_field '["total"]')"
 docker compose exec -T engine \
-  python -m sentinel_engine inject --scenario ddos --duration 10 >/dev/null
+  python -m argus_engine inject --scenario ddos --duration 10 >/dev/null
 query="$BACKEND_URL/api/v1/alerts?ip=$target&attack_type=ddos"
 for _ in $(seq 1 30); do
   found="$(curl -fsS "${auth[@]}" "$query" | json_field '["total"]')"
@@ -101,7 +101,7 @@ done
 alert_id="$(curl -fsS "${auth[@]}" "$query" | json_field '["items"][0]["id"]')"
 detail="$(curl -fsS "${auth[@]}" "$BACKEND_URL/api/v1/alerts/$alert_id")"
 echo "   $(json_field '["description"]' <<<"$detail") (risk $(json_field '["risk_score"]' <<<"$detail"), $(json_field '["severity"]' <<<"$detail"))"
-grep -q '"model_version":"sentinel-flow-' <<<"$detail" || fail "alert not produced by the trained model"
+grep -q '"model_version":"argus-flow-' <<<"$detail" || fail "alert not produced by the trained model"
 
 if [[ -n "${MAILPIT_URL:-}" && "$already_open" -gt 0 ]]; then
   # The detections joined an alert that was already open at its severity, so
@@ -124,8 +124,8 @@ elif [[ -n "${MAILPIT_URL:-}" ]]; then
 fi
 
 echo "-> audit log is append-only for the application role"
-app_user="${APP_DB_USER:-sentinel_app}"
-db_name="${POSTGRES_DB:-sentinel}"
+app_user="${APP_DB_USER:-argus_app}"
+db_name="${POSTGRES_DB:-argus}"
 # Must fail because of the append-only trigger, not for any other reason.
 tamper="$(docker compose exec -T db psql -U "$app_user" -d "$db_name" -v ON_ERROR_STOP=1 \
   -c "DELETE FROM audit_logs" 2>&1)" && fail "the application role could delete audit entries"

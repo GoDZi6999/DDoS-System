@@ -1,5 +1,5 @@
 {
-  "name": "sentinel-flow",
+  "name": "argus-flow",
   "version": "2026.10.04",
   "algorithm": "xgboost",
   "params": {
@@ -382,7 +382,7 @@
     "numpy": "2.5.3"
   },
   "checksums": {
-    "model.joblib": "f96e529d85f461ec7ce2c1eae70fc234be5714d1c76d6ea1e00aef3bc6584dd9",
+    "model.joblib": "091e57bcdd8ed088efd6f3ef7796ecfda2e1b67e88f1d2acc70bc05c9dba9a61",
     "background.joblib": "94045cd989b9a9cf9aeb99c36f39ba75ca84c23fc944c0973824d434da8e29a1"
   }
 }

@@ -15,8 +15,8 @@ import pandas as pd
 import shap
 from sklearn.pipeline import Pipeline
 
-from sentinel_ml.features import FEATURE_NAMES
-from sentinel_ml.models import is_tree_model
+from argus_ml.features import FEATURE_NAMES
+from argus_ml.models import is_tree_model
 
 
 class Explainer:

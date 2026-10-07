@@ -2,10 +2,10 @@
 # small (the raw dataset alone is ~900 MB).
 *
 !ml/requirements.txt
-!ml/sentinel_ml
+!ml/argus_ml
 !engine/requirements.txt
-!engine/sentinel_engine
-!models/sentinel-flow/2026.10.03
-!models/sentinel-flow/2026.10.04
+!engine/argus_engine
+!models/argus-flow/2026.10.03
+!models/argus-flow/2026.10.04
 !data/samples/flow_profiles.csv
 **/__pycache__

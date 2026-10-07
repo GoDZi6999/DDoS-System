@@ -1,7 +1,7 @@
 import pytest
 
-from sentinel_engine.risk import DEFAULT_WEIGHTS, RiskEngine
-from sentinel_engine.window import WindowStats
+from argus_engine.risk import DEFAULT_WEIGHTS, RiskEngine
+from argus_engine.window import WindowStats
 
 
 def flow(end, src, dst, dport, packets=2):

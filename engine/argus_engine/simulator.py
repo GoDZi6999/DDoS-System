@@ -21,7 +21,7 @@ from pathlib import Path
 import numpy as np
 import pandas as pd
 
-from sentinel_engine.packets import Packet
+from argus_engine.packets import Packet
 
 SLOT_S = 0.1
 CLIENTS = [f"10.10.0.{i}" for i in range(20, 120)]

@@ -5,7 +5,7 @@ import { NextResponse, type NextRequest } from "next/server";
 
 export function proxy(request: NextRequest) {
   const hasSession =
-    request.cookies.has("sentinel_access") || request.cookies.has("sentinel_refresh");
+    request.cookies.has("argus_access") || request.cookies.has("argus_refresh");
   if (hasSession) return NextResponse.next();
   const login = new URL("/login", request.url);
   const next = request.nextUrl.pathname + request.nextUrl.search;

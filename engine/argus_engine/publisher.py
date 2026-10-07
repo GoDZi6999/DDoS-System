@@ -1,10 +1,10 @@
 """Output side of the engine: Redis in production, memory in tests.
 
-- detections -> Redis stream `sentinel:detections` (consumed by the alert
+- detections -> Redis stream `argus:detections` (consumed by the alert
   engine; contract in docs/API.md and docs/schemas/detection.schema.json)
-- live traffic counters -> pub/sub channel `sentinel:events` as `traffic.tick`
+- live traffic counters -> pub/sub channel `argus:events` as `traffic.tick`
   (forwarded to dashboards by the API's WebSocket)
-- detection settings <- Redis key `sentinel:config:detection` (written by the API)
+- detection settings <- Redis key `argus:config:detection` (written by the API)
 """
 
 import json
@@ -15,9 +15,9 @@ from redis.exceptions import RedisError
 
 logger = logging.getLogger(__name__)
 
-DETECTIONS_STREAM = "sentinel:detections"
-EVENTS_CHANNEL = "sentinel:events"
-CONFIG_KEY = "sentinel:config:detection"
+DETECTIONS_STREAM = "argus:detections"
+EVENTS_CHANNEL = "argus:events"
+CONFIG_KEY = "argus:config:detection"
 STREAM_MAXLEN = 100_000
 # Detections kept in memory while Redis is unreachable (oldest dropped first).
 MAX_PENDING = 50_000
