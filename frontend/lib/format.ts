@@ -54,6 +54,9 @@ const FEATURES: Record<string, string> = {
   active_mean: "Average active period",
   idle_mean: "Average idle period",
   window_distinct_ports_src_to_dst: "Distinct ports probed in 10 s",
+  beacon_interval_jitter: "Beacon rhythm jitter (0 = perfectly regular)",
+  beacon_interval_s: "Seconds between beacons",
+  beacon_flows: "Beacons in 5 min",
 };
 
 export function featureName(feature: string): string {

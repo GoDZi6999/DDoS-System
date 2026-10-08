@@ -8,6 +8,7 @@ live capture / PCAP replay / simulator / capture sensors (flow records via Redis
    -> window stats (window.py)             cross-flow behaviour over 10 s
    -> classifier (sentinel_ml Predictor)   label, confidence, SHAP explanation
    -> port-scan rule (pipeline.py)         >= 20 distinct ports from one source in 10 s
+   -> beaconing rule (pipeline.py)         one source polling one server:port on a steady rhythm
    -> risk engine (risk.py)                0-100 score with its four components
    -> Redis: sentinel:detections stream (alert engine), traffic.tick events (dashboards)
 ```
@@ -102,11 +103,36 @@ detections from real traffic appear on the Overview and Alerts pages with source
 `live`. `--filter` takes a BPF expression (e.g. `"not port 6379"`) to leave
 traffic out.
 
+## Cross-flow rules
+
+Some attacks only show across many flows, so two rules run next to the classifier.
+Their detections carry `model_version: rule:<name>` and are explained by the evidence
+that triggered them.
+
+| Rule | Fires when | Label | Reported |
+|---|---|---|---|
+| `rule:portscan-v1` | one source reaches ≥ 20 distinct ports on a host within 10 s | portscan | once per pair per 10 s |
+| `rule:beacon-v1` | one source contacts the same server and port ≥ 8 times within 5 min, at intervals of ≥ 1 s that vary by ≤ 20% (std/mean) | botnet | once per pair per minute |
+
+The beaconing rule covers the classifier's least stable class: botnet recall on the
+test set ranges from 0.68 to 0.92 across training recipes
+([`docs/ML_METHODOLOGY.md`](../docs/ML_METHODOLOGY.md#9-model-iteration-20261008)),
+while a bot polling its command-and-control server keeps a rhythm that per-flow
+statistics cannot see. Legitimate periodic traffic (health checks, telemetry,
+monitoring agents) has the same rhythm, so treat a beaconing alert as "worth a
+look" and tune or suppress known pollers. It has not been measured on labelled
+traffic: CIC-IDS2017's MachineLearningCVE files carry no addresses or timestamps.
+The thresholds are in `window.py` (`BEACON_*`).
+
+In the simulator, the botnet phase is six infected clients each polling the C2
+server every 2 s with 2% jitter.
+
 ## Risk score
 
 `risk = 0.40·ml_confidence + 0.25·traffic_anomaly + 0.25·attack_severity + 0.10·source_reputation`
 
-- **ml_confidence**: probability of the predicted attack class × 100 (0.9 for the rule).
+- **ml_confidence**: probability of the predicted attack class × 100 (0.9 for the port-scan
+  rule, 0.8 for the beaconing rule).
 - **traffic_anomaly**: packet rate towards the destination (10 s window) against its
   benign baseline (EWMA of log rate, robust z-score). The baseline is frozen while the
   destination is under attack, and for 60 s after, so a flood cannot become "normal".

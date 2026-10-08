@@ -9,7 +9,7 @@ from scapy.utils import wrpcap
 from sentinel_ml.inference import Predictor
 
 from sentinel_engine.packets import Packet
-from sentinel_engine.pipeline import RULE_PORTSCAN, Engine
+from sentinel_engine.pipeline import RULE_BEACON, RULE_PORTSCAN, Engine
 from sentinel_engine.publisher import MemoryPublisher
 from sentinel_engine.simulator import ATTACKS, SCAN_TARGET, Simulator
 from sentinel_engine.sources import pcap_source
@@ -77,6 +77,30 @@ def test_port_scan_probes_go_through_the_flow_builder_and_trigger_the_rule(predi
     assert len(rule) <= 30 / 10 + 1
     probe_flows = [d for d in published if d["model_version"] != RULE_PORTSCAN]
     assert all(d["packet_count"] == 2 for d in probe_flows)  # SYN + RST
+
+
+def test_botnet_beacons_trigger_the_beaconing_rule(predictor):
+    published = simulate(predictor, "botnet").published  # with benign background
+
+    rule = [d for d in published if d["model_version"] == RULE_BEACON]
+    bots, c2 = set(ATTACKS["botnet"].sources), ATTACKS["botnet"].target
+    assert {d["src_ip"] for d in rule} == bots  # every infected client, no benign one
+    assert all((d["dst_ip"], d["dst_port"]) == c2 and d["label"] == "botnet" for d in rule)
+    assert len(rule) == len(bots)  # one detection per bot per minute, not one per beacon
+    first = rule[0]
+    assert first["explanation"][0]["feature"] == "beacon_interval_jitter"
+    assert first["features"]["beacon_interval_s"] == pytest.approx(2.0, rel=0.1)
+    assert first["risk_score"] > 0
+    jsonschema.validate(first, SCHEMA)
+
+
+def test_benign_background_does_not_look_like_beaconing(predictor):
+    publisher = MemoryPublisher()
+    sim = Simulator.from_csv(PROFILES, realtime=False, clock=lambda: T0)
+    Engine(predictor, publisher, "sim").run(sim.run("normal", loop=True, duration=600))
+
+    assert publisher.published
+    assert not [d for d in publisher.published if d["model_version"] == RULE_BEACON]
 
 
 def test_traffic_ticks_are_published(predictor):

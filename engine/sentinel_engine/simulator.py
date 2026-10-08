@@ -6,7 +6,9 @@ It produces the engine's input directly, along a scenario timeline:
   records whose statistics are *real held-out CIC-IDS2017 flows*
   (data/samples/flow_profiles.csv), with lab addresses assigned here;
 - port scans as individual packets (SYN probes answered by RST), which go
-  through the real flow builder and the window rule.
+  through the real flow builder and the window rule;
+- botnet traffic as infected clients each polling the C2 server on a steady
+  rhythm (a few percent jitter), which is what the beaconing rule looks for.
 
 Because the attack statistics come from CIC-IDS2017, a demo shows the model
 working on traffic like its test set; it is not evidence that the model
@@ -27,6 +29,7 @@ SLOT_S = 0.1
 CLIENTS = [f"10.10.0.{i}" for i in range(20, 120)]
 SERVERS = {"web": ("10.20.0.10", 80), "app": ("10.20.0.11", 8080), "ssh": ("10.20.0.12", 22)}
 SCAN_TARGET = "10.20.0.13"
+BEACON_JITTER = 0.02  # relative standard deviation of a bot's polling period
 
 
 @dataclass(frozen=True)
@@ -36,6 +39,7 @@ class Attack:
     target: tuple[str, int]
     start_rate: float  # flows (or probes) per second at phase start
     end_rate: float  # ... and at phase end (linear ramp)
+    period_s: float | None = None  # each source beacons at this period instead (rates unused)
 
 
 ATTACKS = {
@@ -45,7 +49,16 @@ ATTACKS = {
     "dos": Attack("dos", ("203.0.113.66",), SERVERS["web"], 80, 150),
     "bruteforce": Attack("bruteforce", ("203.0.113.77",), SERVERS["ssh"], 10, 20),
     "webattack": Attack("webattack", ("203.0.113.88",), SERVERS["web"], 5, 12),
-    "botnet": Attack("botnet", ("10.10.0.66",), ("203.0.113.200", 8080), 2, 4),
+    # Six infected clients polling their C2 every 2 s (real bots often poll every
+    # few seconds to minutes; 2 s keeps the demo phase short).
+    "botnet": Attack(
+        "botnet",
+        tuple(f"10.10.0.{i}" for i in range(66, 72)),
+        ("203.0.113.200", 8080),
+        3,
+        3,
+        period_s=2.0,
+    ),
     "portscan": Attack("portscan", ("203.0.113.99",), (SCAN_TARGET, 0), 80, 80),
 }
 
@@ -127,6 +140,11 @@ class Simulator:
         attack = ATTACKS.get(name)
         next_port = 1
         slots = int(seconds / SLOT_S)
+        beacon_due = {}
+        if attack is not None and attack.period_s:
+            beacon_due = {
+                src: start + float(self.rng.uniform(0, attack.period_s)) for src in attack.sources
+            }
         for k in range(slots):
             t = start + k * SLOT_S
             if self.realtime:
@@ -134,7 +152,12 @@ class Simulator:
                 if delay > 0:
                     self.sleep(delay)
             items: list = list(self._benign(t)) if self.benign_rate else []
-            if attack is not None:
+            for src, due in beacon_due.items():
+                if due <= t:
+                    items.append(self._flow(attack.label, src, *attack.target, t))
+                    jitter = 1 + float(self.rng.normal(0, BEACON_JITTER))
+                    beacon_due[src] = due + attack.period_s * jitter
+            if attack is not None and not attack.period_s:
                 rate = attack.start_rate + (attack.end_rate - attack.start_rate) * k / max(slots, 1)
                 count = self.rng.poisson(rate * SLOT_S)
                 for _ in range(count):

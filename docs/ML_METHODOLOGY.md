@@ -111,6 +111,9 @@ Per class (XGBoost, test set):
   explicit rule on top of the classifier: one source reaching 20+ distinct
   ports on a host within 10 s raises a `portscan` detection
   (`model_version: rule:portscan-v1`), explained by the port count.
+  Since 2026.10.08 a second rule covers botnets the same way: one source
+  polling the same server and port at a steady rhythm raises a `botnet`
+  detection (`rule:beacon-v1`, see [`engine/README.md`](../engine/README.md#cross-flow-rules)).
 - **CV vs test gap** (0.985 vs 0.828 macro-F1): CV runs on class-capped data,
   the test set on the real mix, which punishes precision on rare classes. The
   test numbers are the realistic ones.
@@ -308,10 +311,12 @@ Every check passes except botnet recall. 2026.10.03 stays the default and the
 
 **Next steps that could pass the gate honestly:** a validation scheme that
 holds out a later slice of each botnet run (or a second dataset with botnet
-traffic, e.g. CSE-CIC-IDS2018) so botnet drift is visible before test; a
-cross-flow botnet rule (periodic beaconing from one host) in the engine,
-like the port-scan rule; or a benign cap between 150,000 and all flows, chosen
-on such a validation set.
+traffic, e.g. CSE-CIC-IDS2018) so botnet drift is visible before test, or a
+benign cap between 150,000 and all flows, chosen on such a validation set.
+The engine now has a cross-flow beaconing rule for botnets (`rule:beacon-v1`),
+like the port-scan rule; it is not part of the classifier's gate and has not
+been measured on labelled traffic, because the MachineLearningCVE files carry
+no addresses or timestamps.
 
 **Test-set accounting.** Consulted once in this iteration (the run above), so
 four times since 2026.10.03. Each extra look makes reported figures slightly
