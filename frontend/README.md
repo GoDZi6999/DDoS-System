@@ -1,6 +1,6 @@
 # Frontend (Next.js + Tailwind)
 
-SOC dashboard for SentinelAI. Every widget reads the live API; there is no
+SOC dashboard for ArgusAI. Every widget reads the live API; there is no
 hard-coded or mock data.
 
 > This Next.js version (16.x) differs from older releases. See `AGENTS.md`

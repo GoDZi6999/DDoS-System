@@ -56,7 +56,7 @@ test("a simulated DDoS is detected live and worked to resolution", async ({ page
 
   await expect(page.getByRole("heading", { name: `DDoS → ${TARGET}` })).toBeVisible();
   await expect(page.getByText("Why the model flagged it")).toBeVisible();
-  await expect(page.getByText(/Advisory: SentinelAI does not block traffic/)).toBeVisible();
+  await expect(page.getByText(/Advisory: ArgusAI does not block traffic/)).toBeVisible();
 
   const workflow = async (button: string, status: string) => {
     await page.getByRole("button", { name: button, exact: true }).click();
@@ -119,7 +119,7 @@ test("an admin adds an email channel and its test message is delivered", async (
     await expect(logRow.getByText("Sent", { exact: true })).toBeVisible({ timeout: 30_000 });
     const messages = await (await request.get(`${mailpit}/api/v1/messages`)).json();
     expect(messages.messages.map((m: { Subject: string }) => m.Subject)).toContain(
-      `SentinelAI test notification for channel '${name}'`,
+      `ArgusAI test notification for channel '${name}'`,
     );
   } else {
     // Without an SMTP relay (the default) the delivery fails with a clear reason.

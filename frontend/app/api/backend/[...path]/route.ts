@@ -1,4 +1,4 @@
-// Same-origin proxy from the browser to the SentinelAI API.
+// Same-origin proxy from the browser to the ArgusAI API.
 //
 // The browser sends its session cookie; this handler swaps it for the API's
 // bearer token (see lib/session.ts). Only the endpoints the dashboard uses are
@@ -58,7 +58,7 @@ async function forward(request: NextRequest, ctx: RouteContext<"/api/backend/[..
   try {
     response = await backendFetch(`/api/v1/${target}${request.nextUrl.search}`, init);
   } catch {
-    return problem(502, "The SentinelAI API is unreachable.");
+    return problem(502, "The ArgusAI API is unreachable.");
   }
 
   // A password change ends every session of the user, this one included.

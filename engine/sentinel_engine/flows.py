@@ -1,4 +1,4 @@
-"""Bidirectional flow builder computing SentinelAI's 37 flow features.
+"""Bidirectional flow builder computing ArgusAI's 37 flow features.
 
 Definitions follow CICFlowMeter (which produced the training data) so live
 flows are comparable with CIC-IDS2017:

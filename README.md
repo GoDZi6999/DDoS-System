@@ -1,8 +1,8 @@
-# SentinelAI
+# ArgusAI
 
 **Real-time AI-powered network threat detection and SOC platform.**
 
-SentinelAI classifies network flows in real time with an explainable model,
+ArgusAI classifies network flows in real time with an explainable model,
 scores their risk and raises alerts that analysts work through a SOC-style
 workflow, with notifications and a tamper-resistant audit trail. It
 **detects and alerts; it does not block traffic**. Its recommended actions are
@@ -158,7 +158,7 @@ legacy/           original NSL-KDD + Flask prototype, superseded, kept for refer
 
 ## Limitations
 
-Read these before relying on SentinelAI:
+Read these before relying on ArgusAI:
 
 - **One training dataset.** All model numbers come from CIC-IDS2017, a lab
   capture. Expect lower accuracy on other networks until the model is
@@ -191,5 +191,5 @@ of derived flow profiles for the simulator.
 ## Legacy prototype
 
 The original NSL-KDD + Flask prototype in [`legacy/`](legacy/README.md) is
-superseded by SentinelAI and kept only for reference; nothing in the stack
+superseded by ArgusAI and kept only for reference; nothing in the stack
 uses it.

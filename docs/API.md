@@ -1,4 +1,4 @@
-# SentinelAI API
+# ArgusAI API
 
 Base path `/api/v1`. Interactive documentation (Swagger UI, generated from the
 code) is served at <http://localhost:8000/docs>; its **Authorize** button logs
@@ -71,7 +71,7 @@ severity, source IP and explanation; a jump to a higher severity band is
 recorded as `alert.escalated`.
 
 Severity bands: 0–30 LOW, 31–60 MEDIUM, 61–80 HIGH, 81–100 CRITICAL.
-`recommended_action` is advisory text; SentinelAI does not block traffic.
+`recommended_action` is advisory text; ArgusAI does not block traffic.
 
 ### Workflow
 

@@ -44,7 +44,7 @@ class Settings(BaseSettings):
     smtp_security: Literal["starttls", "tls", "none"] = "starttls"
     smtp_username: str | None = None
     smtp_password: SecretStr | None = None
-    smtp_from: str = "SentinelAI <sentinelai@localhost>"
+    smtp_from: str = "ArgusAI <argusai@localhost>"
     # Base URL of the dashboard, for links in notifications.
     dashboard_url: str = "http://localhost:3000"
     # Webhook and Slack targets must be public HTTPS addresses. Allow private

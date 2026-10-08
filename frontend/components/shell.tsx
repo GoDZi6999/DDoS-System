@@ -51,7 +51,7 @@ function Brand() {
       </span>
       <span className="leading-tight">
         <span className="block font-display text-base font-bold tracking-[0.18em] text-ink">
-          SENTINEL<span className="text-accent">{"//"}</span>AI
+          ARGUS<span className="text-accent">{"//"}</span>AI
         </span>
         <span className="label-caps block text-[0.6rem] text-muted">SOC console</span>
       </span>
@@ -226,7 +226,7 @@ export function PageHeader({
     <div className="mb-6 flex flex-wrap items-end justify-between gap-3">
       <div>
         <p className="label-caps text-accent">
-          <span aria-hidden>{"// "}</span>SentinelAI
+          <span aria-hidden>{"// "}</span>ArgusAI
         </p>
         <h1 className="mt-1 font-display text-2xl font-bold uppercase tracking-[0.08em] text-ink">
           {title}

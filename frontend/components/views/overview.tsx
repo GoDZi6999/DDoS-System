@@ -45,7 +45,7 @@ export function Overview() {
     <>
       <PageHeader
         title="Overview"
-        description="Detections from the real-time engine. SentinelAI detects and alerts; it does not block traffic."
+        description="Detections from the real-time engine. ArgusAI detects and alerts; it does not block traffic."
         actions={
           <div role="group" aria-label="Time window" className="flex rounded-sm border border-line-strong bg-sunken p-0.5">
             {(Object.keys(WINDOWS) as Window[]).map((w) => (

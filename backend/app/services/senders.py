@@ -24,7 +24,7 @@ from app.models import NotificationChannel, NotificationDelivery
 from app.models.enums import ChannelKind
 from app.services.notifications import title
 
-USER_AGENT = "SentinelAI-Notifier/1.0"
+USER_AGENT = "ArgusAI-Notifier/1.0"
 HTTP_TIMEOUT_S = 10.0
 SMTP_TIMEOUT_S = 15.0
 
@@ -42,7 +42,7 @@ def text_body(payload: dict[str, Any]) -> str:
     alert = payload.get("alert")
     if not alert:
         return (
-            f"This is a test notification for the SentinelAI channel '{payload.get('channel')}'.\n"
+            f"This is a test notification for the ArgusAI channel '{payload.get('channel')}'.\n"
             f"If you can read it, the channel works.\n\nDashboard: {payload.get('url')}\n"
         )
     port = alert["destination_port"]
@@ -57,10 +57,10 @@ def text_body(payload: dict[str, Any]) -> str:
             f"model confidence {alert['confidence'] * 100:.1f}%",
             f"Detections:  {alert['detection_count']} since {alert['first_seen_at']}",
             "",
-            "Recommended action (advisory; SentinelAI does not block traffic):",
+            "Recommended action (advisory; ArgusAI does not block traffic):",
             alert["recommended_action"],
             "",
-            f"Open in SentinelAI: {payload['url']}",
+            f"Open in ArgusAI: {payload['url']}",
             "",
         ]
     )
@@ -104,7 +104,7 @@ def slack_body(payload: dict[str, Any]) -> dict[str, Any]:
             },
             {
                 "type": "context",
-                "elements": [{"type": "mrkdwn", "text": f"<{payload['url']}|Open in SentinelAI>"}],
+                "elements": [{"type": "mrkdwn", "text": f"<{payload['url']}|Open in ArgusAI>"}],
             },
         ],
     }

@@ -51,7 +51,7 @@ Open the alert:
   bytes from the server, the server's initial TCP window, packet sizes).
 - **Risk score**: the four signals (model confidence, traffic anomaly, attack
   severity, source reputation) and the total.
-- **Recommended action**: advisory text. SentinelAI detects and alerts; it
+- **Recommended action**: advisory text. ArgusAI detects and alerts; it
   does not block traffic.
 - **Detections**: the latest flows aggregated into the alert.
 

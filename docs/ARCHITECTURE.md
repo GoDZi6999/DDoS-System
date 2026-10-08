@@ -1,9 +1,9 @@
-# SentinelAI — Phase 1 Architecture
+# ArgusAI — Phase 1 Architecture
 
 Real-Time AI-Powered Network Threat Detection & SOC Platform.
 Status: **approved** (2026-10-03). Implementation progress is tracked in the root README.
 
-**Claim scope.** SentinelAI *detects and classifies suspicious network traffic in real time and raises risk-scored alerts*. It does not claim to prevent DDoS. Mitigation is a future, opt-in, safeguarded phase (§11).
+**Claim scope.** ArgusAI *detects and classifies suspicious network traffic in real time and raises risk-scored alerts*. It does not claim to prevent DDoS. Mitigation is a future, opt-in, safeguarded phase (§11).
 
 ## 0. Findings on the existing prototype
 
@@ -16,7 +16,7 @@ The current root-level Flask app trains on NSL-KDD (`data_preprocessing.py`, `mo
 | In-process queue, Flask-SocketIO, open dashboard, `SECRET_KEY` default | No auth, no persistence, not horizontally separable | FastAPI + Redis + PostgreSQL + JWT/RBAC |
 | NSL-KDD (1999 traffic) | Weak real-world relevance | CIC-IDS2017 / CIC-DDoS2019 primary; UNSW-NB15 for cross-dataset generalisation check |
 
-The prototype is retained under `legacy/` for reference only; SentinelAI superseded it in Phase 4 and nothing uses it.
+The prototype is retained under `legacy/` for reference only; ArgusAI superseded it in Phase 4 and nothing uses it.
 
 ## 1. System architecture
 
@@ -246,7 +246,7 @@ legacy/         NSL-KDD prototype (superseded, reference only)
 2. **Live vs. dataset distribution shift:** models trained on CIC capture conditions may misfire on a home network. *Mitigation:* feature set restricted to live-computable flow stats, cross-dataset eval, and a PCAP-replay + simulator test in the demo.
 3. **Flow-meter choice:** custom Scapy flow builder (full control, slower) vs. CICFlowMeter (feature-compatible, Java). *Decided:* Scapy builder replicating the CIC feature definitions; validate against CICFlowMeter on a sample PCAP.
 4. **Scope:** Prometheus/Grafana and mitigation are stage-later items; core value is Phases 3–6. *Decided (Phase 7):* no Celery; an asyncio notifier over a PostgreSQL outbox.
-5. **Naming:** repo is `DDoS-System`; *Decided:* product name **SentinelAI**.
+5. **Naming:** repo is `DDoS-System`; *Decided:* product name **ArgusAI**.
 
 ## 14. Limitations (to be stated in README)
 Detection quality is bounded by training data; encrypted/application-layer attacks are only visible via flow statistics; Scapy throughput limits line-rate capture (suitable for lab/small networks); SHAP explains the model, not ground-truth causality; no prevention is claimed.

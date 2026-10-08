@@ -51,7 +51,7 @@ export function NotificationsView() {
     <>
       <PageHeader
         title="Notifications"
-        description="Alerts are sent to each enabled channel once per severity band, so a flood does not flood your inbox. Messages are advisory; SentinelAI does not block traffic."
+        description="Alerts are sent to each enabled channel once per severity band, so a flood does not flood your inbox. Messages are advisory; ArgusAI does not block traffic."
       />
       <div className="grid gap-4 lg:grid-cols-3">
         <Card className="lg:col-span-2" title="Channels">

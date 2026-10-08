@@ -1,6 +1,6 @@
 # Security controls
 
-What SentinelAI implements today (all phases), how it is verified, and what is
+What ArgusAI implements today (all phases), how it is verified, and what is
 still open. The threat model (STRIDE) is in
 [`ARCHITECTURE.md`](ARCHITECTURE.md) §9.
 
@@ -77,7 +77,7 @@ still open. The threat model (STRIDE) is in
 | Admin-only configuration | Channel management and the delivery log require the admin role; every change and test is audited, with secrets masked in the audit entry | `test_rbac.py`, `test_channel_secrets_are_masked_and_changes_audited` |
 | Secrets never returned | Slack webhook paths, webhook query strings and signing secrets are masked in every API response; the worker logs delivery ids and channel names, never URLs | same |
 | SSRF guard | Webhook/Slack targets must be `https` and resolve only to public addresses (loopback, private, link-local such as cloud metadata `169.254.169.254`, and other non-global ranges are refused); redirects are not followed | `test_private_or_plain_http_targets_are_refused` |
-| Signed webhooks | Optional HMAC-SHA256 over timestamp and body, so receivers can authenticate SentinelAI and reject replays | `test_webhook_delivery_is_signed` |
+| Signed webhooks | Optional HMAC-SHA256 over timestamp and body, so receivers can authenticate ArgusAI and reject replays | `test_webhook_delivery_is_signed` |
 | No notification storms | One message per channel, alert and severity band, plus a per-channel hourly cap (excess recorded as `suppressed`) | `test_escalation_notifies_once_per_new_severity_band`, `test_channel_rate_limit_suppresses_excess_deliveries` |
 | Network placement | Only the notifier (and the optional mail catcher) sits on `egressnet`; the database, Redis, API workers and engine have no outbound route | `docker-compose.yml` |
 | Retention | Old flows are purged automatically; alert evidence, alerts and the append-only audit log are kept | `test_retention_keeps_evidence_and_recent_flows` |

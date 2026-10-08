@@ -72,7 +72,7 @@ def test_payload(channel: NotificationChannel) -> dict[str, Any]:
 def title(payload: dict[str, Any]) -> str:
     alert = payload.get("alert")
     if not alert:
-        return f"SentinelAI test notification for channel '{payload.get('channel', '?')}'"
+        return f"ArgusAI test notification for channel '{payload.get('channel', '?')}'"
     verb = "escalated" if payload["event"] == NotificationEvent.ALERT_ESCALATED else "new alert"
     return f"[{alert['severity']}] {verb}: {alert['description']} (risk {alert['risk_score']})"
 

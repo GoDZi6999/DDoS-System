@@ -212,7 +212,7 @@ def list_interfaces() -> None:
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(
         prog="python -m sentinel_engine.sensor",
-        description="Capture this host's traffic and ship flow records to SentinelAI.",
+        description="Capture this host's traffic and ship flow records to ArgusAI.",
     )
     parser.add_argument("--interface", help="adapter to capture on (see --list-interfaces)")
     parser.add_argument("--filter", help='BPF capture filter, e.g. "tcp or udp"')

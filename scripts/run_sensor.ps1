@@ -1,6 +1,6 @@
 <#
 .SYNOPSIS
-  Run a SentinelAI capture sensor on this Windows machine.
+  Run a ArgusAI capture sensor on this Windows machine.
 
 .DESCRIPTION
   Captures this machine's traffic (read-only, via Npcap) and ships flow

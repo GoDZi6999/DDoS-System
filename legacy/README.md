@@ -1,7 +1,7 @@
 # Legacy prototype (NSL-KDD + Flask)
 
 This folder holds the project's first prototype, kept unchanged for reference.
-**SentinelAI replaces it** and the folder will be deleted once the new ML
+**ArgusAI replaces it** and the folder will be deleted once the new ML
 pipeline (Phase 4) matches its functionality.
 
 Why it is being replaced (details in [`docs/ARCHITECTURE.md`](../docs/ARCHITECTURE.md) §0):

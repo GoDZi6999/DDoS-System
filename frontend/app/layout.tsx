@@ -24,7 +24,7 @@ const mono = localFont({
 });
 
 export const metadata: Metadata = {
-  title: "SentinelAI",
+  title: "ArgusAI",
   description: "Real-time network threat detection and security monitoring",
 };
 

@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import { ShieldIcon } from "@/components/icons";
 import { LoginForm } from "./login-form";
 
-export const metadata: Metadata = { title: "Sign in · SentinelAI" };
+export const metadata: Metadata = { title: "Sign in · ArgusAI" };
 
 function Radar() {
   return (
@@ -51,7 +51,7 @@ export default async function LoginPage({ searchParams }: PageProps<"/login">) {
             </h2>
             <p className="mt-3 text-sm text-ink-2">
               Real-time classification of network flows with an explainable model, risk scoring
-              and a SOC workflow. Detection and alerting only: SentinelAI never blocks traffic.
+              and a SOC workflow. Detection and alerting only: ArgusAI never blocks traffic.
             </p>
           </div>
         </div>
@@ -77,7 +77,7 @@ export default async function LoginPage({ searchParams }: PageProps<"/login">) {
             </span>
             <div>
               <p className="font-display text-xl font-bold tracking-[0.18em] text-ink">
-                SENTINEL<span className="text-accent">{"//"}</span>AI
+                ARGUS<span className="text-accent">{"//"}</span>AI
               </p>
               <p className="label-caps text-muted">SOC console</p>
             </div>

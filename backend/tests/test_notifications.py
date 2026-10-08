@@ -321,13 +321,13 @@ def test_email_is_sent_through_smtp(client, admin_headers, monkeypatch):
     make_channel(client, admin_headers, config={"recipients": ["a@example.com", "b@example.com"]})
     ingest(client, risk_score=90)
 
-    process(client, smtp_host="mail.example.com", smtp_from="SentinelAI <soc@example.com>")
+    process(client, smtp_host="mail.example.com", smtp_from="ArgusAI <soc@example.com>")
 
     (message,) = sent
     assert message["To"] == "a@example.com, b@example.com"
     assert message["Subject"].startswith("[CRITICAL] new alert: DDoS detected")
     body = message.get_content()
-    assert "Recommended action (advisory; SentinelAI does not block traffic)" in body
+    assert "Recommended action (advisory; ArgusAI does not block traffic)" in body
     assert "/alerts/1" in body
     assert deliveries(client)[0].status == DeliveryStatus.SENT
 
@@ -387,7 +387,7 @@ def test_slack_message_escapes_markup():
     }
     body = json.dumps(slack_body(payload))
     assert "<script>" not in body and "&lt;script&gt; &amp; co" in body
-    assert "<http://localhost:3000/alerts/1|Open in SentinelAI>" in body
+    assert "<http://localhost:3000/alerts/1|Open in ArgusAI>" in body
 
 
 # --- retention ---------------------------------------------------------------

@@ -71,7 +71,7 @@ export async function login(username: string, password: string): Promise<LoginRe
       cache: "no-store",
     });
   } catch {
-    return { ok: false, error: "The SentinelAI API is unreachable." };
+    return { ok: false, error: "The ArgusAI API is unreachable." };
   }
   if (response.status === 429) {
     const wait = Math.ceil(Number(response.headers.get("retry-after") ?? "60") / 60);

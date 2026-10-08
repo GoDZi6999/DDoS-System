@@ -1,6 +1,6 @@
 # ML pipeline (`sentinel_ml`)
 
-Training, evaluation and inference for SentinelAI's flow classifier.
+Training, evaluation and inference for ArgusAI's flow classifier.
 Methodology and results: [`docs/ML_METHODOLOGY.md`](../docs/ML_METHODOLOGY.md);
 latest report: [`ml/reports/`](reports/).
 

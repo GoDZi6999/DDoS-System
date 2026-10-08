@@ -1,6 +1,6 @@
 # Backend (FastAPI)
 
-REST + WebSocket API and the background workers (alert engine, notifier) for SentinelAI. API
+REST + WebSocket API and the background workers (alert engine, notifier) for ArgusAI. API
 reference: [`docs/API.md`](../docs/API.md); security controls:
 [`docs/SECURITY.md`](../docs/SECURITY.md).
 

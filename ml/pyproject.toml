@@ -6,7 +6,7 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "sentinel-ml"
 version = "0.1.0"
-description = "SentinelAI flow features, training, evaluation and inference"
+description = "ArgusAI flow features, training, evaluation and inference"
 requires-python = ">=3.12"
 
 [tool.setuptools.packages.find]

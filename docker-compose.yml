@@ -1,4 +1,4 @@
-# SentinelAI development stack:  docker compose up --build
+# ArgusAI development stack:  docker compose up --build
 #
 # Every variable has a development default, so a fresh clone starts without a
 # .env file. Copy .env.example to .env to override them, and set real secrets
@@ -199,7 +199,7 @@ services:
       SMTP_SECURITY: ${SMTP_SECURITY:-starttls}
       SMTP_USERNAME: ${SMTP_USERNAME:-}
       SMTP_PASSWORD: ${SMTP_PASSWORD:-}
-      SMTP_FROM: ${SMTP_FROM:-SentinelAI <sentinelai@localhost>}
+      SMTP_FROM: ${SMTP_FROM:-ArgusAI <argusai@localhost>}
       NOTIFY_ALLOW_PRIVATE_TARGETS: ${NOTIFY_ALLOW_PRIVATE_TARGETS:-false}
       EVENT_RETENTION_DAYS: ${EVENT_RETENTION_DAYS:-14}
       EVIDENCE_RETENTION_DAYS: ${EVIDENCE_RETENTION_DAYS:-90}
@@ -231,7 +231,7 @@ services:
     restart: unless-stopped
 
   # Optional monitoring (profile "monitoring"): Prometheus scrapes the API's
-  # /metrics; Grafana shows a provisioned SentinelAI dashboard on
+  # /metrics; Grafana shows a provisioned ArgusAI dashboard on
   # http://localhost:3001 (user admin, GRAFANA_ADMIN_PASSWORD).
   prometheus:
     image: prom/prometheus:v3.7.0

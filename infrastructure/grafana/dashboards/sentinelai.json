@@ -1,6 +1,6 @@
 {
   "uid": "sentinelai-overview",
-  "title": "SentinelAI",
+  "title": "ArgusAI",
   "tags": [
     "sentinelai"
   ],
@@ -581,5 +581,5 @@
       }
     }
   ],
-  "description": "SentinelAI pipeline and API health. Detection quality is on the SOC dashboard; this is operations."
+  "description": "ArgusAI pipeline and API health. Detection quality is on the SOC dashboard; this is operations."
 }

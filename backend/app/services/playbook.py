@@ -1,4 +1,4 @@
-"""Human-readable alert text. Recommended actions are advisory only: SentinelAI
+"""Human-readable alert text. Recommended actions are advisory only: ArgusAI
 never blocks traffic on its own."""
 
 from ipaddress import IPv4Address, IPv6Address
