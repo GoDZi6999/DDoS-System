@@ -20,6 +20,14 @@ downloading the dataset (other bundles are git-ignored):
 | `sentinel-flow/2026.10.03` | **default** | 0.828 | 0.20% | 0.92 | [report](../ml/reports/2026.10.03/report.md) |
 | `sentinel-flow/2026.10.04` | opt-in candidate | **0.853** | **0.11%** | 0.75 | [report](../ml/reports/2026.10.04/report.md) |
 
+A third candidate, `2026.10.08` (every benign flow, balanced class weights,
+argmax), also failed the gate: 0.14% false positives and test macro-F1 0.841,
+but botnet recall 0.68. Its bundle is not committed; its
+[report](../ml/reports/2026.10.08/report.md) is, and
+[`docs/ML_METHODOLOGY.md`](../docs/ML_METHODOLOGY.md#9-model-iteration-20261008)
+explains it. The gate is now code (`ml/sentinel_ml/gate.py`) and every
+training run records its verdict against 2026.10.03.
+
 The candidate is better on most measures (45% fewer false positives, higher
 precision on every rare class, better calibration) but did not pass the
 release gate set before it was evaluated: no class may lose more than 10

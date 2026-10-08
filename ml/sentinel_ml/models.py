@@ -120,9 +120,10 @@ def fit(
     sample weights: every class carries the same total weight, as in the
     2026.10.03 recipe, so rare classes keep their sensitivity, while the extra
     benign flows teach the model what normal traffic looks like (the
-    2026.10.03 recipe capped benign at 150,000 flows). "sqrt" (square root of
-    balanced, the 2026.10.04 recipe) traded botnet recall for precision;
-    "none" ignores imbalance. The linear and forest baselines balance
+    2026.10.03 recipe capped benign at 150,000 flows). On test this cut false
+    positives but lost botnet recall (2026.10.08, docs/ML_METHODOLOGY.md
+    section 9), as did "sqrt" (square root of balanced, 2026.10.04); "none"
+    ignores imbalance. The linear and forest baselines balance
     internally (class_weight)."""
     params = {}
     if weighting != "none" and isinstance(pipeline[-1], XGBClassifier):
