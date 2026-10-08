@@ -1,6 +1,7 @@
 # ArgusAI API
 
-Base path `/api/v1`. Interactive documentation (Swagger UI, generated from the
+Base path `/api/v1` for the dashboard and people; `/v2` is the
+[customer API](#customer-api-v2) for applications, authenticated with API keys. Interactive documentation (Swagger UI, generated from the
 code) is served at <http://localhost:8000/docs>; its **Authorize** button logs
 in with the same OAuth2 password flow described below.
 
@@ -135,7 +136,8 @@ Audited actions: `auth.login`, `auth.login_failed`, `auth.locked`,
 `user.created`, `user.updated`, `alert.created`, `alert.escalated`,
 `alert.acknowledged`, `alert.status_changed`, `alert.note_added`,
 `alert.assigned`, `config.updated`, `notification.channel_created`,
-`notification.channel_updated`, `notification.test_sent`, `retention.purged`.
+`notification.channel_updated`, `notification.test_sent`, `retention.purged`,
+`api_key.created`, `api_key.revoked`.
 
 ## Notifications
 
@@ -207,6 +209,82 @@ ws.onclose = (e) => { if (e.code === 4401) { /* refresh the token, reconnect */ 
 - Close code **4401**: authentication failed, or the access token expired
   (connections do not outlive their token).
 - Notifications are best effort; after reconnecting, reload state over REST.
+
+## Customer API (`/v2`)
+
+For applications and services rather than people: authenticated with an API
+key in the `X-API-Key` header, not a user login. Two endpoints, both taking a
+batch of flow records:
+
+| Endpoint | Scope | What it does |
+|---|---|---|
+| `POST /v2/detect` | `detect` | Classifies the flows now and returns a verdict per flow. Stateless: nothing is stored and no alert is raised. |
+| `POST /v2/flows` | `ingest` | Queues the flows for the real-time engine (`202`), which scores risk and raises alerts, notifications and webhooks like any capture sensor. Needs an engine running with `--source sensor`. |
+
+### Keys
+
+Admins manage keys in `/api/v1/api-keys` (audited as `api_key.created` and
+`api_key.revoked`):
+
+```bash
+curl -s -X POST localhost:8000/api/v1/api-keys -H "Authorization: Bearer $TOKEN" \
+  -H 'Content-Type: application/json' -d '{"name": "shop-backend", "scopes": ["detect"]}'
+# {"id": 1, "name": "shop-backend", "prefix": "3f9a1c2e", "scopes": ["detect"], ...,
+#  "key": "argus_3f9a1c2e_Qm9…"}   <- shown once; only its SHA-256 is stored
+```
+
+| Endpoint | Notes |
+|---|---|
+| `GET /api-keys` | Admin. Paginated; never returns the key or its hash. `last_used_at` is updated at most once a minute. |
+| `POST /api-keys` | Admin. `name` (unique, letters, digits, space, `.`, `_`, `-`), `scopes`: `detect` and/or `ingest`. `201` with the key. |
+| `POST /api-keys/{id}/revoke` | Admin. Takes effect on the next request. |
+
+### Flow records
+
+Both endpoints take `{"flows": [ ... ]}` with 1 to `API_MAX_FLOWS` (default
+1000) records, in the same shape the capture sensor sends:
+
+```json
+{
+  "src_ip": "198.51.100.7", "dst_ip": "10.0.0.5", "src_port": 40000, "dst_port": 80,
+  "protocol": "tcp", "start": 1790000000.0, "end": 1790000001.2, "duration": 1.2,
+  "packet_count": 14, "byte_count": 9120,
+  "features": {"flow_duration_s": 1.2, "fwd_packets": 8, "...": 0.0}
+}
+```
+
+`features` holds the model's flow statistics (the
+`features` of `models/sentinel-flow/<version>/feature_config.json`, computed the way the sensor's
+flow builder computes them). `/v2/detect` answers `422` naming any missing
+feature. Times are Unix seconds; values must be finite.
+
+### Detect response
+
+```json
+{
+  "model_version": "sentinel-flow-2026.10.03",
+  "attacks": 1,
+  "results": [
+    {"index": 0, "label": "ddos", "is_attack": true, "confidence": 0.998,
+     "class_probs": {"benign": 0.001, "ddos": 0.998, "...": 0.0},
+     "explanation": [{"feature": "fwd_pkt_len_max", "value": 5840.0, "contribution": 1.73, "weight": 31.2}],
+     "recommended_action": "Rate-limit or block the source at the edge ..."}
+  ]
+}
+```
+
+`explanation` lists the top SHAP reasons for attack flows, for at most
+`API_MAX_EXPLAINED` (default 20) attacks per request; others get `[]`.
+`recommended_action` is advice from the response playbook; ArgusAI does not
+block anything itself.
+
+### Errors and limits
+
+`401` missing, unknown or revoked key; `403` key lacks the scope; `413` more
+than `API_MAX_FLOWS` flows; `422` invalid records; `429` more than
+`API_RATE_PER_MINUTE` (default 600) requests in the current minute for that
+key, with `Retry-After: 60`; `503` model or flow queue unavailable. The model
+loads on the first `/v2/detect` call, which takes a few seconds.
 
 ## Detection stream (ML engine → alert engine)
 

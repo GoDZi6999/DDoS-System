@@ -1,15 +1,20 @@
 """FastAPI application entry point: `uvicorn app.main:app`."""
 
+import math
 from collections.abc import AsyncIterator, Awaitable, Callable
 from contextlib import asynccontextmanager
+from typing import Any
 
 from fastapi import FastAPI, Request, Response, status
+from fastapi.encoders import jsonable_encoder
+from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
 from redis.asyncio import Redis
 
 from app import __version__
 from app.api import health, metrics
 from app.api.v1 import router as api_v1_router
+from app.api.v2 import router as api_v2_router
 from app.core.config import get_settings
 from app.db.session import create_engine, create_sessionmaker
 from app.services.errors import ConflictError, NotFoundError, UnprocessableError
@@ -24,6 +29,18 @@ API_HEADERS = {
     "Cache-Control": "no-store",
     "Content-Security-Policy": "default-src 'none'; frame-ancestors 'none'",
 }
+
+
+def _json_safe(value: Any) -> Any:
+    """Validation errors echo the rejected input, which may be a float JSON cannot
+    encode (a number like 1e400 parses to infinity)."""
+    if isinstance(value, float) and not math.isfinite(value):
+        return str(value)
+    if isinstance(value, dict):
+        return {k: _json_safe(v) for k, v in value.items()}
+    if isinstance(value, list):
+        return [_json_safe(v) for v in value]
+    return value
 
 
 @asynccontextmanager
@@ -45,6 +62,7 @@ def create_app() -> FastAPI:
     app = FastAPI(title="ArgusAI API", version=__version__, lifespan=lifespan)
     app.include_router(health.router)
     app.include_router(api_v1_router)
+    app.include_router(api_v2_router)
     if get_settings().metrics_enabled:
         app.include_router(metrics.router)
 
@@ -55,6 +73,11 @@ def create_app() -> FastAPI:
     @app.exception_handler(ConflictError)
     async def conflict(_: Request, exc: ConflictError) -> JSONResponse:
         return JSONResponse({"detail": str(exc)}, status_code=status.HTTP_409_CONFLICT)
+
+    @app.exception_handler(RequestValidationError)
+    async def invalid_request(_: Request, exc: RequestValidationError) -> JSONResponse:
+        detail = _json_safe(jsonable_encoder(exc.errors()))
+        return JSONResponse({"detail": detail}, status_code=status.HTTP_422_UNPROCESSABLE_CONTENT)
 
     @app.exception_handler(UnprocessableError)
     async def unprocessable(_: Request, exc: UnprocessableError) -> JSONResponse:
@@ -69,7 +92,9 @@ def create_app() -> FastAPI:
         metrics.observe(
             metrics.route_template(request), request.method, response.status_code, timer.elapsed()
         )
-        headers = SECURITY_HEADERS | (API_HEADERS if request.url.path.startswith("/api/") else {})
+        headers = SECURITY_HEADERS | (
+            API_HEADERS if request.url.path.startswith(("/api/", "/v2/")) else {}
+        )
         for name, value in headers.items():
             response.headers.setdefault(name, value)
         return response
