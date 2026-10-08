@@ -28,6 +28,7 @@ def test_training_writes_a_complete_bundle_and_report(trained_bundle):
     assert all(0.2 <= w <= 1 for w in weights.values())  # more conservative, never silenced
     assert metadata["ablation"]["dropped"] == ["init_win_bytes_fwd", "init_win_bytes_bwd"]
     assert 0 <= metadata["metrics"]["calibration_error"] <= 1
+    assert metadata["release_gate"] is None  # no reference bundle next to these test artifacts
     # Synthetic classes are well separated, so every candidate should learn them.
     assert metadata["metrics"]["macro_f1"] > 0.9
     assert {"confusion_matrix.png", "feature_importance.png", "metrics.json", "report.md"} <= {
