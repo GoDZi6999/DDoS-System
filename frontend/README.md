@@ -14,6 +14,7 @@ hard-coded or mock data.
 | `/alerts` | all roles | Filter by status, severity, attack type and IP; sort by recency or risk; filters live in the URL |
 | `/alerts/[id]` | all roles; actions for analyst+ | Facts, recommended action, SHAP factors, risk breakdown, detections, notes, history; acknowledge / contain / resolve / false positive / reopen, assign to me |
 | `/audit` | admin | Append-only audit log with before/after values |
+| `/notifications` | admin | Email, Slack and webhook channels (minimum severity, hourly cap, test message) and the delivery log with retry status |
 | `/users` | admin | Create users, change roles, deactivate/reactivate |
 | `/settings` | all roles | Detection settings (analyst reads, admin edits); change own password |
 | `/login` | public | Sign-in form (server action) |
@@ -41,8 +42,15 @@ Next.js is a backend-for-frontend (`lib/session.ts`):
   `/login?next=…` before rendering.
 - Security headers and a same-origin CSP are set in `next.config.ts`.
 
-Charts use Recharts with the design tokens in `app/globals.css` (benign =
-series blue, attack = status red, always labelled; light and dark mode).
+**Look and feel.** A dark SOC-console theme: HUD panels with corner
+brackets, a left navigation rail, a threat-level indicator (highest open
+severity), a UTC clock, a terminal-style live event feed and monospace data.
+Tokens live in `app/globals.css`. Fonts (Chakra Petch, Inter, JetBrains Mono)
+are vendored in `app/fonts` under the SIL Open Font License, so builds need no
+network. Charts use Recharts with a palette validated for colour-blind
+separation and contrast on the panel surface (benign `#1a9fd6`, attack
+`#e8394a`). Severity and status colours always come with a label and a glyph,
+and animations stop under `prefers-reduced-motion`.
 
 ## Run locally (without Docker)
 
@@ -66,8 +74,10 @@ ADMIN_PASSWORD=… npm run test:e2e
 The Playwright tests (`e2e/`) sign in, check the live feed, inject a simulated
 DDoS with `docker compose exec engine …` (override with `E2E_INJECT_COMMAND`),
 wait for the alert to appear without a reload, work it through acknowledge →
-contain → resolve with a note, and check the audit log. `E2E_BASE_URL`
-defaults to `http://localhost:3000`.
+contain → resolve with a note, and check the audit log. Another test adds an
+email channel and checks its test message is sent; with `MAILPIT_URL` set
+(stack started with the `mail` profile) it also finds the message in the mail
+catcher. `E2E_BASE_URL` defaults to `http://localhost:3000`.
 
 `next.config.ts` sets `output: "standalone"`; the Dockerfile ships only
 `.next/standalone` plus static assets in a non-root `node:24-alpine` image.

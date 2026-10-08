@@ -40,6 +40,12 @@ MATRIX = [
     ("GET", "/api/v1/users/{user_id}", ADMIN, None),
     ("PATCH", "/api/v1/users/{user_id}", ADMIN, {"email": "matrix@example.com"}),
     ("GET", "/api/v1/audit", ADMIN, None),
+    ("GET", "/api/v1/notifications/channels", ADMIN, None),
+    ("POST", "/api/v1/notifications/channels", ADMIN, {"name": "x"}),
+    ("GET", "/api/v1/notifications/channels/{channel_id}", ADMIN, None),
+    ("PATCH", "/api/v1/notifications/channels/{channel_id}", ADMIN, {}),
+    ("POST", "/api/v1/notifications/channels/{channel_id}/test", ADMIN, None),
+    ("GET", "/api/v1/notifications/deliveries", ADMIN, None),
 ]
 
 # Reachable without a role: health probes and the token endpoints themselves.
@@ -67,7 +73,7 @@ def test_matrix_covers_every_endpoint():
 
 @pytest.mark.parametrize(("method", "template", "minimum", "body"), MATRIX)
 def test_role_matrix(client, method, template, minimum, body):
-    path = template.format(alert_id=1, event_id=1, user_id=1)
+    path = template.format(alert_id=1, event_id=1, user_id=1, channel_id=1)
     users = {role: create_user(client, f"{role.value}-matrix", role) for role in Role}
 
     anonymous = client.request(method, path, json=body)

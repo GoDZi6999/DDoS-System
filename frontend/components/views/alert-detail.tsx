@@ -152,7 +152,11 @@ export function AlertDetailView({ id }: { id: number }) {
 
       <div className="grid gap-4 lg:grid-cols-3">
         <div className="space-y-4 lg:col-span-2">
-          <Card title="Recommended action" description="Advisory: SentinelAI does not block traffic itself.">
+          <Card
+            title="Recommended action"
+            description="Advisory: SentinelAI does not block traffic itself."
+            tone={alert.severity === "CRITICAL" && alert.allowed_transitions.length && alert.status !== "RESOLVED" && alert.status !== "FALSE_POSITIVE" ? "critical" : undefined}
+          >
             <p className="text-sm text-ink">{alert.recommended_action}</p>
           </Card>
 
@@ -175,7 +179,7 @@ export function AlertDetailView({ id }: { id: number }) {
             <Facts alert={alert} />
           </Card>
           <Card title="Risk score" description="Signals combined by the risk engine (0–100 each)">
-            <p className="tabular mb-3 text-3xl font-semibold text-ink">
+            <p className="tabular mb-3 font-mono text-4xl font-semibold text-ink glow-text">
               {alert.risk_score}
               <span className="text-sm font-normal text-muted"> / 100</span>
             </p>
@@ -214,8 +218,8 @@ function Facts({ alert }: { alert: AlertDetail }) {
     <dl className="grid grid-cols-[auto_1fr] gap-x-4 gap-y-2 text-sm">
       {rows.map(([label, value]) => (
         <div key={label} className="contents">
-          <dt className="text-muted">{label}</dt>
-          <dd className="tabular break-all text-right text-ink">{value}</dd>
+          <dt className="label-caps self-center text-muted">{label}</dt>
+          <dd className="tabular break-all text-right font-mono text-xs text-ink">{value}</dd>
         </div>
       ))}
     </dl>
@@ -239,8 +243,11 @@ function Factors({ alert }: { alert: AlertDetail }) {
               value {formatCount(factor.value)} · {factor.weight.toFixed(1)}%
             </span>
           </div>
-          <div className="mt-1 h-2 rounded-full bg-ink/5">
-            <div className="h-2 rounded-full bg-accent" style={{ width: `${(factor.weight / max) * 100}%` }} />
+          <div className="mt-1 h-2 rounded-[1px] bg-accent/5">
+            <div
+              className="h-2 rounded-[1px] bg-accent shadow-[0_0_10px_-2px_var(--accent)]"
+              style={{ width: `${(factor.weight / max) * 100}%` }}
+            />
           </div>
         </li>
       ))}
@@ -259,9 +266,9 @@ function RiskBreakdown({ components }: { components: Record<string, number> }) {
             <span className="text-ink">{RISK_COMPONENTS[key] ?? featureName(key)}</span>
             <span className="tabular text-ink-2">{Math.round(value)}</span>
           </div>
-          <div className="mt-1 h-1.5 rounded-full bg-ink/5">
+          <div className="mt-1 h-1.5 rounded-[1px] bg-accent/5">
             <div
-              className="h-1.5 rounded-full bg-ink-2"
+              className="h-1.5 rounded-[1px] bg-accent-strong/70"
               style={{ width: `${Math.min(Math.max(value, 0), 100)}%` }}
             />
           </div>
@@ -277,7 +284,7 @@ function Detections({ data }: { data?: Page<EventSummary> }) {
   return (
     <div className="-mx-4 overflow-x-auto sm:mx-0">
       <table className="w-full min-w-[520px] text-left text-sm">
-        <thead className="text-xs text-muted">
+        <thead className="label-caps text-muted">
           <tr className="border-b border-line">
             <th className="px-4 py-2 font-medium sm:pl-0">Time</th>
             <th className="px-2 py-2 font-medium">Source</th>
@@ -286,7 +293,7 @@ function Detections({ data }: { data?: Page<EventSummary> }) {
             <th className="px-4 py-2 text-right font-medium sm:pr-0">Risk</th>
           </tr>
         </thead>
-        <tbody className="tabular">
+        <tbody className="tabular font-mono text-xs">
           {data.items.map((event) => (
             <tr key={event.id} className="border-b border-line last:border-0">
               <td className="px-4 py-2 text-ink-2 sm:pl-0">{formatTime(event.ts)}</td>
@@ -311,7 +318,7 @@ function Notes({ alert, canAct, onAdded }: { alert: AlertDetail; canAct: boolean
       {alert.notes.length ? (
         <ul className="mb-4 space-y-3">
           {alert.notes.map((n) => (
-            <li key={n.id} className="rounded-lg bg-ink/[0.03] p-3">
+            <li key={n.id} className="rounded-sm bg-sunken border border-line p-3">
               <p className="text-xs text-muted">
                 <span className="font-medium text-ink-2">{n.author.username}</span> · {formatTime(n.created_at)}
               </p>
@@ -391,7 +398,7 @@ function History({ alert }: { alert: AlertDetail }) {
     <ol className="space-y-3 border-l border-line pl-4">
       {alert.history.map((entry, i) => (
         <li key={i} className="relative">
-          <span aria-hidden className="absolute -left-[21px] top-1.5 size-2 rounded-full border-2 border-surface bg-ink-2" />
+          <span aria-hidden className="absolute -left-[21px] top-1.5 size-2 rotate-45 border border-accent bg-sunken" />
           <p className="text-sm text-ink">{describe(entry, alert)}</p>
           <p className="text-xs text-muted">
             {entry.actor} · {formatTime(entry.ts)}

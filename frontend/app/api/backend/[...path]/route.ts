@@ -17,6 +17,7 @@ const ALLOWED = [
   /^config\/detection$/,
   /^audit$/,
   /^users(\/\d+)?$/,
+  /^notifications\/(channels(\/\d+(\/test)?)?|deliveries)$/,
 ];
 
 const MAX_BODY = 64 * 1024;

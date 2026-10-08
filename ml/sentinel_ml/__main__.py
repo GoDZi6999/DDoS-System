@@ -21,8 +21,13 @@ def main(argv: list[str] | None = None) -> int:
     train.add_argument("--data", type=Path, default=Path("data/raw/cic-ids2017/MachineLearningCVE"))
     train.add_argument("--models", type=Path, default=Path("models"))
     train.add_argument("--reports", type=Path, default=Path("ml/reports"))
-    train.add_argument("--cap", type=int, default=150_000, help="max training rows per class")
-    train.add_argument("--cv-cap", type=int, default=20_000, help="max CV rows per class")
+    train.add_argument(
+        "--cap", type=int, default=150_000, help="max training rows per attack class"
+    )
+    train.add_argument("--no-ablation", action="store_true", help="skip the feature ablation")
+    train.add_argument(
+        "--tune-decisions", action="store_true", help="bundle tuned per-class decision weights"
+    )
     train.add_argument("--seed", type=int, default=42)
 
     predict = commands.add_parser("predict", help="classify flows from a CIC-format CSV")
@@ -42,7 +47,9 @@ def main(argv: list[str] | None = None) -> int:
     if args.command == "train":
         from sentinel_ml.train import run
 
-        run(args.data, args.models, args.reports, args.cap, args.cv_cap, args.seed)
+        run(
+            args.data, args.models, args.reports, args.cap, args.seed, ablation=not args.no_ablation
+        )
         return 0
 
     if args.command == "export-profiles":

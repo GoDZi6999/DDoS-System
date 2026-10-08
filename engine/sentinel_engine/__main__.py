@@ -5,6 +5,7 @@
     python -m sentinel_engine run --source live --interface eth0     (needs CAP_NET_RAW)
     python -m sentinel_engine run --source sensor                    (flows from sensors)
     python -m sentinel_engine inject --scenario ddos --duration 20   (attack burst only)
+    python -m sentinel_engine bench                                   (in-process benchmark)
 
 Capture sensors on other hosts: python -m sentinel_engine.sensor --help
 
@@ -40,10 +41,25 @@ def main(argv: list[str] | None = None) -> int:
     run.add_argument("--filter", help="BPF filter for live capture")
 
     inject = commands.add_parser("inject", help="simulate one attack burst (no background)")
-    inject.add_argument("--scenario", choices=sorted(set(SCENARIOS) - {"normal", "demo"}))
+    inject.add_argument(
+        "--scenario", required=True, choices=sorted(set(SCENARIOS) - {"normal", "demo"})
+    )
     inject.add_argument("--duration", type=float, default=20)
 
+    bench = commands.add_parser("bench", help="measure classification latency and throughput")
+    bench.add_argument("--flows", type=int, default=3000)
+    bench.add_argument("--json", action="store_true")
+
     args = parser.parse_args(argv)
+    if args.command == "bench":
+        from sentinel_engine.bench import main as bench_main
+
+        return bench_main(
+            os.environ.get("MODEL_BUNDLE", DEFAULT_BUNDLE),
+            Path(os.environ.get("FLOW_PROFILES", DEFAULT_PROFILES)),
+            args.flows,
+            args.json,
+        )
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s %(message)s")
 
     from sentinel_ml.inference import Predictor

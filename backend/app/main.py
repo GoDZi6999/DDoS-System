@@ -8,7 +8,7 @@ from fastapi.responses import JSONResponse
 from redis.asyncio import Redis
 
 from app import __version__
-from app.api import health
+from app.api import health, metrics
 from app.api.v1 import router as api_v1_router
 from app.core.config import get_settings
 from app.db.session import create_engine, create_sessionmaker
@@ -45,6 +45,8 @@ def create_app() -> FastAPI:
     app = FastAPI(title="SentinelAI API", version=__version__, lifespan=lifespan)
     app.include_router(health.router)
     app.include_router(api_v1_router)
+    if get_settings().metrics_enabled:
+        app.include_router(metrics.router)
 
     @app.exception_handler(NotFoundError)
     async def not_found(_: Request, exc: NotFoundError) -> JSONResponse:
@@ -62,7 +64,11 @@ def create_app() -> FastAPI:
     async def security_headers(
         request: Request, call_next: Callable[[Request], Awaitable[Response]]
     ) -> Response:
+        timer = metrics.Timer()
         response = await call_next(request)
+        metrics.observe(
+            metrics.route_template(request), request.method, response.status_code, timer.elapsed()
+        )
         headers = SECURITY_HEADERS | (API_HEADERS if request.url.path.startswith("/api/") else {})
         for name, value in headers.items():
             response.headers.setdefault(name, value)

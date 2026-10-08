@@ -4,7 +4,7 @@ import { useState } from "react";
 import useSWR from "swr";
 import { AlertTable } from "@/components/alert-table";
 import { PageHeader } from "@/components/shell";
-import { Button, Card, Notice, Pagination, STATUS_LABEL, Skeleton, inputClass } from "@/components/ui";
+import { Button, Card, Notice, Pagination, STATUS_LABEL, Skeleton, inputBase } from "@/components/ui";
 import { attackName } from "@/lib/format";
 import type { AlertStatus, AlertSummary, Page, Severity } from "@/lib/types";
 
@@ -24,7 +24,7 @@ function Chip({ on, onClick, children }: { on: boolean; onClick: () => void; chi
       type="button"
       aria-pressed={on}
       onClick={onClick}
-      className={`rounded-full border px-2.5 py-1 text-xs font-medium ${
+      className={`rounded-sm border px-2.5 py-1 font-mono text-[11px] uppercase tracking-wider ${
         on ? "border-accent bg-accent/15 text-ink" : "border-line text-ink-2 hover:text-ink"
       }`}
     >
@@ -116,7 +116,7 @@ export function AlertsList() {
               aria-label="Attack type"
               value={attack}
               onChange={(e) => update({ attack_type: e.target.value })}
-              className={`${inputClass} w-auto`}
+              className={`${inputBase} w-auto`}
             >
               <option value="">All attack types</option>
               {ATTACKS.map((a) => (
@@ -137,7 +137,7 @@ export function AlertsList() {
                 placeholder="Source or target IP"
                 value={ipDraft}
                 onChange={(e) => setIpDraft(e.target.value)}
-                className={`${inputClass} w-48`}
+                className={`${inputBase} w-48`}
               />
               <Button type="submit">Search</Button>
             </form>
@@ -145,7 +145,7 @@ export function AlertsList() {
               aria-label="Sort"
               value={sort}
               onChange={(e) => update({ sort: e.target.value === "risk" ? "risk" : null })}
-              className={`${inputClass} ml-auto w-auto`}
+              className={`${inputBase} ml-auto w-auto`}
             >
               <option value="last_seen">Most recent first</option>
               <option value="risk">Highest risk first</option>

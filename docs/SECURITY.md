@@ -1,6 +1,6 @@
 # Security controls
 
-What SentinelAI implements today (through Phase 6), how it is verified, and what is
+What SentinelAI implements today (all phases), how it is verified, and what is
 still open. The threat model (STRIDE) is in
 [`ARCHITECTURE.md`](ARCHITECTURE.md) §9.
 
@@ -70,6 +70,30 @@ still open. The threat model (STRIDE) is in
 | Request size | Proxied bodies are capped at 64 KB | route handler |
 | Client IP | The API trusts `X-Forwarded-For` only from the dashboard container's fixed address (`FORWARDED_ALLOW_IPS`), so login throttling and audit entries see the browser's address | manual check of `audit_logs.ip` |
 
+### Notifications
+
+| Control | Detail | Verified by |
+|---|---|---|
+| Admin-only configuration | Channel management and the delivery log require the admin role; every change and test is audited, with secrets masked in the audit entry | `test_rbac.py`, `test_channel_secrets_are_masked_and_changes_audited` |
+| Secrets never returned | Slack webhook paths, webhook query strings and signing secrets are masked in every API response; the worker logs delivery ids and channel names, never URLs | same |
+| SSRF guard | Webhook/Slack targets must be `https` and resolve only to public addresses (loopback, private, link-local such as cloud metadata `169.254.169.254`, and other non-global ranges are refused); redirects are not followed | `test_private_or_plain_http_targets_are_refused` |
+| Signed webhooks | Optional HMAC-SHA256 over timestamp and body, so receivers can authenticate SentinelAI and reject replays | `test_webhook_delivery_is_signed` |
+| No notification storms | One message per channel, alert and severity band, plus a per-channel hourly cap (excess recorded as `suppressed`) | `test_escalation_notifies_once_per_new_severity_band`, `test_channel_rate_limit_suppresses_excess_deliveries` |
+| Network placement | Only the notifier (and the optional mail catcher) sits on `egressnet`; the database, Redis, API workers and engine have no outbound route | `docker-compose.yml` |
+| Retention | Old flows are purged automatically; alert evidence, alerts and the append-only audit log are kept | `test_retention_keeps_evidence_and_recent_flows` |
+
+### Monitoring
+
+- `/metrics` (Prometheus) is served by the API outside `/api/v1`, so the
+  dashboard's allowlisted proxy never exposes it; in Compose the API port is
+  bound to `127.0.0.1` and Prometheus reaches it on the internal network. It
+  carries counts and timings only (no IPs, users or secrets), labels requests
+  by route template so clients cannot inflate label cardinality, and can be
+  turned off with `METRICS_ENABLED=false`.
+- Grafana and Prometheus (optional `monitoring` profile) bind to `127.0.0.1`;
+  Grafana sign-up is disabled and its admin password comes from
+  `GRAFANA_ADMIN_PASSWORD`.
+
 ### Infrastructure
 
 - Published ports bind to `127.0.0.1`; PostgreSQL and Redis are not published
@@ -117,8 +141,8 @@ still open. The threat model (STRIDE) is in
 
 | Gap | Impact | Plan |
 |---|---|---|
-| No TLS termination | Credentials cross the network in clear text if the stack is exposed beyond localhost | Put a reverse proxy (Caddy/nginx) with TLS in front for any shared deployment; documented in Phase 8 |
-| No request-body size limit in the app server | Large bodies could consume memory | The same reverse proxy should cap body size |
+| No TLS termination | Credentials cross the network in clear text if the stack is exposed beyond localhost | Put a TLS reverse proxy in front for any shared deployment (see [Deploying beyond localhost](#deploying-beyond-localhost)) |
+| No request-body size limit in the app server | Large bodies could consume memory | The same reverse proxy caps body size (example below) |
 | Client-chosen IP when the dashboard is exposed directly | Next.js fills `X-Forwarded-For` from the socket only when the request has none, so a client talking to it directly can choose the IP the API sees: it could dodge the per-IP login limit (the per-username limit still applies) and falsify the IP in audit entries | The TLS reverse proxy recommended above must overwrite `X-Forwarded-For` with the peer address |
 | Inline scripts allowed by the CSP | `'unsafe-inline'` weakens XSS protection; React escapes output and no HTML is rendered from data | Move to nonce-based CSP if the dashboard grows user-generated rich content |
 | Throttling fails open | If Redis is down, logins are not rate-limited (argon2 still makes guessing slow) | Accepted for availability; logged as a warning |
@@ -127,4 +151,33 @@ still open. The threat model (STRIDE) is in
 | Dev defaults | Default database passwords and an ephemeral JWT key are for local use | Set real values in `.env`; production mode refuses to start without `JWT_SECRET` |
 | Unencrypted sensor link | Flow statistics and the sensor password cross the network in clear text when sensors run on other hosts | Keep `SENSOR_BIND` on `127.0.0.1` for a local sensor; for remote sensors use a VPN, SSH tunnel or a TLS proxy (e.g. stunnel) in front of Redis |
 | Sensors can impersonate each other | Any holder of the sensor password can send flows under any sensor name or overwrite another sensor's status | One shared sensor account is the trade-off for simple setup; per-sensor ACL accounts would close it |
+| Channel secrets stored in clear in PostgreSQL | Anyone with database access can read Slack webhook URLs and webhook signing secrets | Restrict database access; encrypting `notification_channels.config` with a key from the environment is a candidate improvement |
+| DNS rebinding | The SSRF guard resolves the host before sending, and the HTTP client resolves it again; a hostile DNS server could answer differently the second time | Admin-only configuration limits who can set targets; pinning the connection to the checked address would close it |
+| SMTP relay is trusted | `SMTP_*` settings come from the operator's environment and are not subject to the private-address check (relays usually are internal) | Use STARTTLS/TLS (`SMTP_SECURITY`) with a real relay |
+| `/metrics` has no authentication | Anyone who can reach the API port directly can read operational counts (open alerts, flow rates) | Port bound to localhost; keep it off public interfaces or set `METRICS_ENABLED=false` |
 | Model attacks (evasion, poisoning) | Adversarial traffic can be crafted to look benign | Documented limitation; model bundles are activated by admins only (Phase 4) |
+
+## Deploying beyond localhost
+
+The Compose defaults bind every port to `127.0.0.1`. To let other machines
+reach the dashboard, put a TLS-terminating reverse proxy in front of the
+**frontend only** (the API stays internal; the dashboard reaches it through
+the backend-for-frontend). For example, with Caddy on the host:
+
+```
+soc.example.com {
+	request_body {
+		max_size 1MB
+	}
+	reverse_proxy 127.0.0.1:3000 {
+		# Overwrite, never append: the API trusts this header from the dashboard.
+		header_up X-Forwarded-For {remote_host}
+	}
+}
+```
+
+and in `.env`: `COOKIE_SECURE=true`, `DASHBOARD_URL=https://soc.example.com`,
+`ENVIRONMENT=production`, a random `JWT_SECRET` (32+ characters), new database
+passwords and a long `INITIAL_ADMIN_PASSWORD` (or change the generated one
+after the first login). This closes the TLS, body-size and client-IP gaps
+listed above.

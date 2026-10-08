@@ -119,6 +119,13 @@ jobs:
       INITIAL_ADMIN_PASSWORD: ci-smoke-test-passphrase
       ADMIN_PASSWORD: ci-smoke-test-passphrase
       JWT_SECRET: ci-only-jwt-secret-0123456789abcdefghijklmnop
+      # Email notifications go to the bundled mail catcher, checked by the
+      # smoke and end-to-end tests through its API.
+      COMPOSE_PROFILES: mail
+      SMTP_HOST: mailpit
+      SMTP_PORT: "1025"
+      SMTP_SECURITY: none
+      MAILPIT_URL: http://localhost:8025
     steps:
       - uses: actions/checkout@v4
       - name: Validate compose files

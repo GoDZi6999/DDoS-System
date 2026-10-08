@@ -6,6 +6,8 @@
 # With ADMIN_PASSWORD set (the INITIAL_ADMIN_PASSWORD used at first start), it
 # also logs in, pushes synthetic detections through the alert engine and checks
 # the audit log is append-only for the application's database role.
+# With MAILPIT_URL set (stack started with the "mail" profile and SMTP_HOST=mailpit)
+# it also checks that the DDoS alert is emailed through the notifier.
 # Needs curl and python3; the authenticated part also needs docker compose.
 set -euo pipefail
 
@@ -29,6 +31,10 @@ echo "-> backend readiness  $BACKEND_URL/health/ready"
 ready="$(curl -sS "$BACKEND_URL/health/ready")" || fail "backend unreachable"
 echo "   $ready"
 grep -q '"status":"ready"' <<<"$ready" || fail "a backend dependency is down"
+
+echo "-> backend metrics    $BACKEND_URL/metrics"
+metrics="$(curl -fsS "$BACKEND_URL/metrics")" || fail "metrics endpoint unreachable"
+grep -q '^sentinel_open_alerts{severity="CRITICAL"}' <<<"$metrics" || fail "pipeline gauges missing from /metrics"
 
 echo "-> frontend status    $FRONTEND_URL/status"
 page="$(curl -fsS "$FRONTEND_URL/status")" || fail "frontend unreachable"
@@ -70,8 +76,19 @@ done
 [[ "${events:-0}" -ge 1 ]] || fail "no flows reached the database"
 echo "   $events flows analysed"
 
+if [[ -n "${MAILPIT_URL:-}" ]]; then
+  echo "-> email notification channel (delivered to $MAILPIT_URL)"
+  channel="$(curl -fsS "${auth[@]}" -H "Content-Type: application/json" \
+    -X POST "$BACKEND_URL/api/v1/notifications/channels" \
+    -d "{\"name\":\"smoke-test mail $(date +%s)\",\"kind\":\"email\",\"min_severity\":\"HIGH\",\"config\":{\"recipients\":[\"soc@example.com\"]}}")" \
+    || fail "could not create a notification channel"
+  channel_id="$(json_field '["id"]' <<<"$channel")"
+fi
+
 echo "-> simulated DDoS -> ML engine -> risk -> alert engine -> alert"
 target="10.20.0.10"  # the simulator's web server
+open_query="$BACKEND_URL/api/v1/alerts?ip=$target&attack_type=ddos&status=NEW&status=INVESTIGATING&status=CONTAINED"
+already_open="$(curl -fsS "${auth[@]}" "$open_query" | json_field '["total"]')"
 docker compose exec -T engine \
   python -m sentinel_engine inject --scenario ddos --duration 10 >/dev/null
 query="$BACKEND_URL/api/v1/alerts?ip=$target&attack_type=ddos"
@@ -85,6 +102,26 @@ alert_id="$(curl -fsS "${auth[@]}" "$query" | json_field '["items"][0]["id"]')"
 detail="$(curl -fsS "${auth[@]}" "$BACKEND_URL/api/v1/alerts/$alert_id")"
 echo "   $(json_field '["description"]' <<<"$detail") (risk $(json_field '["risk_score"]' <<<"$detail"), $(json_field '["severity"]' <<<"$detail"))"
 grep -q '"model_version":"sentinel-flow-' <<<"$detail" || fail "alert not produced by the trained model"
+
+if [[ -n "${MAILPIT_URL:-}" && "$already_open" -gt 0 ]]; then
+  # The detections joined an alert that was already open at its severity, so
+  # by design no channel is notified again (fresh stacks, as in CI, test this).
+  echo "-> alert notification: skipped, a DDoS alert on $target was already open"
+elif [[ -n "${MAILPIT_URL:-}" ]]; then
+  echo "-> alert notification: outbox -> notifier -> SMTP"
+  for _ in $(seq 1 30); do
+    status="$(curl -fsS "${auth[@]}" \
+      "$BACKEND_URL/api/v1/notifications/deliveries?channel_id=$channel_id&alert_id=$alert_id" \
+      | python3 -c "import json, sys; i = json.load(sys.stdin)['items']; print(i[0]['status'] if i else 'none')")"
+    [[ "$status" == "sent" || "$status" == "failed" ]] && break
+    sleep 1
+  done
+  [[ "$status" == "sent" ]] || fail "notification delivery status: $status"
+  subject="$(curl -fsS "$MAILPIT_URL/api/v1/messages" \
+    | python3 -c "import json, sys; print(next((m['Subject'] for m in json.load(sys.stdin)['messages'] if 'DDoS' in m['Subject']), ''))")"
+  grep -q "DDoS detected" <<<"$subject" || fail "no alert email in the mail catcher (got '$subject')"
+  echo "   $subject"
+fi
 
 echo "-> audit log is append-only for the application role"
 app_user="${APP_DB_USER:-sentinel_app}"

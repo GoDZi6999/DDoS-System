@@ -19,14 +19,18 @@ import type { Distribution, Timeseries, TrafficTick } from "@/lib/types";
 
 const BENIGN = "var(--series-1)";
 const ATTACK = "var(--status-critical)";
-const AXIS = { stroke: "var(--axis)", fontSize: 11, tick: { fill: "var(--text-muted)" } };
+const AXIS = {
+  stroke: "var(--axis)",
+  fontSize: 10,
+  tick: { fill: "var(--text-muted)", fontFamily: "var(--font-mono)" },
+};
 
 type TooltipRow = { name: string; value: number; color: string };
 
 function TooltipBox({ title, rows, unit }: { title: string; rows: TooltipRow[]; unit?: string }) {
   return (
-    <div className="rounded-lg border border-line bg-raised px-3 py-2 text-xs shadow-sm">
-      <p className="mb-1 font-medium text-ink">{title}</p>
+    <div className="rounded-sm border border-line-strong bg-sunken/95 px-3 py-2 font-mono text-xs shadow-[0_0_24px_-8px_var(--accent)]">
+      <p className="mb-1 text-accent">{title}</p>
       {rows.map((row) => (
         <p key={row.name} className="flex items-center gap-2 text-ink-2">
           <span aria-hidden className="size-2 rounded-sm" style={{ background: row.color }} />
@@ -43,10 +47,14 @@ function TooltipBox({ title, rows, unit }: { title: string; rows: TooltipRow[]; 
 
 export function Legend({ items }: { items: { label: string; color: string }[] }) {
   return (
-    <ul className="flex flex-wrap gap-x-4 gap-y-1 text-xs text-ink-2">
+    <ul className="flex flex-wrap gap-x-4 gap-y-1 font-mono text-[11px] uppercase tracking-wider text-ink-2">
       {items.map((item) => (
         <li key={item.label} className="flex items-center gap-1.5">
-          <span aria-hidden className="size-2.5 rounded-sm" style={{ background: item.color }} />
+          <span
+            aria-hidden
+            className="size-2.5 rounded-[1px]"
+            style={{ background: item.color, boxShadow: `0 0 8px ${item.color}` }}
+          />
           {item.label}
         </li>
       ))}
@@ -74,6 +82,16 @@ export function LiveTrafficChart({ ticks }: { ticks: TrafficTick[] }) {
       <div className="mt-3 h-56" role="img" aria-label="Live flows per second, benign and attack">
         <ResponsiveContainer width="100%" height="100%">
           <AreaChart data={data} margin={{ top: 4, right: 8, bottom: 0, left: -12 }}>
+            <defs>
+              <linearGradient id="fill-benign" x1="0" y1="0" x2="0" y2="1">
+                <stop offset="0%" stopColor={BENIGN} stopOpacity={0.95} />
+                <stop offset="100%" stopColor={BENIGN} stopOpacity={0.35} />
+              </linearGradient>
+              <linearGradient id="fill-attack" x1="0" y1="0" x2="0" y2="1">
+                <stop offset="0%" stopColor={ATTACK} stopOpacity={0.95} />
+                <stop offset="100%" stopColor={ATTACK} stopOpacity={0.45} />
+              </linearGradient>
+            </defs>
             <CartesianGrid stroke="var(--grid)" vertical={false} />
             <XAxis dataKey="ts" tickFormatter={clock} minTickGap={48} {...AXIS} />
             <YAxis allowDecimals={false} tickFormatter={formatCount} {...AXIS} />
@@ -100,8 +118,7 @@ export function LiveTrafficChart({ ticks }: { ticks: TrafficTick[] }) {
               stackId="flows"
               stroke="var(--surface)"
               strokeWidth={2}
-              fill={BENIGN}
-              fillOpacity={0.85}
+              fill="url(#fill-benign)"
               isAnimationActive={false}
             />
             <Area
@@ -111,8 +128,7 @@ export function LiveTrafficChart({ ticks }: { ticks: TrafficTick[] }) {
               stackId="flows"
               stroke="var(--surface)"
               strokeWidth={2}
-              fill={ATTACK}
-              fillOpacity={0.9}
+              fill="url(#fill-attack)"
               isAnimationActive={false}
             />
           </AreaChart>
@@ -203,13 +219,13 @@ export function DistributionBars({ distribution }: { distribution: Distribution 
         <li key={item.label} title={`${attackName(item.label)}: ${item.count} flows`}>
           <div className="flex justify-between text-xs">
             <span className="text-ink">{attackName(item.label)}</span>
-            <span className="tabular text-ink-2">
+            <span className="tabular font-mono text-ink-2">
               {formatCount(item.count)} · {share(item.count, total)}
             </span>
           </div>
-          <div className="mt-1 h-2 rounded-full bg-ink/5">
+          <div className="mt-1 h-2 rounded-[1px] bg-accent/5">
             <div
-              className="h-2 rounded-full bg-accent"
+              className="h-2 rounded-[1px] bg-accent shadow-[0_0_10px_-2px_var(--accent)]"
               style={{ width: `${Math.max((item.count / max) * 100, 1.5)}%` }}
             />
           </div>

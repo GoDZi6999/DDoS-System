@@ -120,6 +120,7 @@ export type AuditEntry = {
 
 export type TrafficTick = {
   ts: string;
+  source_id?: string;
   flows_per_s: number;
   packets_per_s: number;
   attacks: number;
@@ -132,6 +133,37 @@ export type LiveMessage =
   | { type: "auth.ok"; user: User }
   | { type: "alert.new" | "alert.updated"; data: AlertSummary }
   | { type: "traffic.tick"; data: TrafficTick };
+
+export type ChannelKind = "email" | "slack" | "webhook";
+export type DeliveryStatus = "pending" | "sent" | "failed" | "suppressed";
+
+export type Channel = {
+  id: number;
+  name: string;
+  kind: ChannelKind;
+  enabled: boolean;
+  min_severity: Severity;
+  max_per_hour: number;
+  config: { recipients?: string[]; webhook_url?: string; url?: string; secret_set?: boolean };
+  created_at: string;
+  updated_at: string;
+  last_delivery_at: string | null;
+  last_delivery_status: DeliveryStatus | null;
+};
+
+export type Delivery = {
+  id: number;
+  channel: { id: number; name: string; kind: ChannelKind };
+  alert_id: number | null;
+  event: "alert.created" | "alert.escalated" | "test";
+  status: DeliveryStatus;
+  attempts: number;
+  last_error: string | null;
+  title: string;
+  created_at: string;
+  next_attempt_at: string;
+  sent_at: string | null;
+};
 
 export type SensorStatus = "online" | "stale" | "offline";
 

@@ -64,8 +64,13 @@ def test_detections_become_alerts_and_are_acknowledged(client, redis_client):
     assert count_rows(client, Alert) == 1
     assert _pending(redis_client) == 0
     assert json.loads(redis_client.get(CONFIG_KEY))["alert_min_risk"] == 31  # mirrored
-    published = [json.loads(pubsub.get_message(timeout=1)["data"])["type"] for _ in range(2)]
-    assert published == ["alert.new", "alert.updated"]
+    published = []
+    while (message := pubsub.get_message(timeout=1)) is not None:
+        published.append(json.loads(message["data"])["type"])
+    # Detections read together are stored as one batch: one notification per
+    # alert per batch, so "alert.updated" appears only if they were split.
+    assert published[0] == "alert.new"
+    assert set(published[1:]) <= {"alert.updated"}
     pubsub.close()
 
 
@@ -103,7 +108,7 @@ def test_entries_abandoned_by_a_crashed_consumer_are_reclaimed(client, redis_cli
 def test_database_failure_leaves_the_entry_pending_for_retry(client, redis_client, monkeypatch):
     entry_id = _publish(redis_client, detection().model_dump_json())
     calls = {"n": 0}
-    real_ingest = alert_engine.ingest_detection
+    real_ingest = alert_engine.ingest_batch
 
     async def flaky_ingest(*args, **kwargs):
         calls["n"] += 1
@@ -111,7 +116,7 @@ def test_database_failure_leaves_the_entry_pending_for_retry(client, redis_clien
             raise OperationalError("INSERT", {}, ConnectionError("database restarting"))
         return await real_ingest(*args, **kwargs)
 
-    monkeypatch.setattr(alert_engine, "ingest_detection", flaky_ingest)
+    monkeypatch.setattr(alert_engine, "ingest_batch", flaky_ingest)
 
     async def processed() -> bool:
         return await count_rows_async(client, NetworkEvent) == 1
@@ -147,3 +152,42 @@ def test_published_detection_schema_matches_the_model():
 
     path = Path(__file__).resolve().parents[2] / "docs" / "schemas" / "detection.schema.json"
     assert json.loads(path.read_text()) == Detection.model_json_schema()
+
+
+def test_a_batch_is_stored_together_with_one_notification_per_alert(client, redis_client):
+    pubsub = redis_client.pubsub()
+    pubsub.subscribe(EVENTS_CHANNEL)
+    entries = [
+        (f"1700000000000-{i}", {b"data": detection(dst_ip=dst).model_dump_json().encode()})
+        for i, dst in enumerate(["203.0.113.1"] * 30 + ["203.0.113.2"] * 20)
+    ]
+
+    async def handle() -> None:
+        engine = AlertEngine(client.app.state.sessionmaker, client.app.state.redis, "batch")
+        await engine.ensure_group()
+        assert await engine.handle_batch(entries)
+
+    run(client, handle)
+
+    assert count_rows(client, NetworkEvent) == 50
+    assert count_rows(client, Alert) == 2
+    messages = []
+    while (message := pubsub.get_message(timeout=1)) is not None:
+        if message["type"] == "message":
+            messages.append(json.loads(message["data"])["type"])
+    assert messages == ["alert.new", "alert.new"]
+
+
+def test_a_redelivered_entry_does_not_block_the_rest_of_its_batch(client):
+    first = ("1700000000000-0", {b"data": detection().model_dump_json().encode()})
+    second = ("1700000000000-1", {b"data": detection().model_dump_json().encode()})
+
+    async def handle() -> None:
+        engine = AlertEngine(client.app.state.sessionmaker, client.app.state.redis, "dup")
+        await engine.ensure_group()
+        assert await engine.handle_batch([first])
+        assert await engine.handle_batch([first, second])
+
+    run(client, handle)
+
+    assert count_rows(client, NetworkEvent) == 2

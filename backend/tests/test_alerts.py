@@ -31,6 +31,16 @@ def test_attack_detection_raises_an_explained_alert(client, viewer_headers):
     assert [entry["action"] for entry in alert["history"]] == ["alert.created"]
 
 
+def test_unexplained_higher_risk_detection_keeps_the_alert_explanation(client, viewer_headers):
+    # The engine explains only a sample of flood flows (explanation: []).
+    first = ingest(client, risk_score=70)
+    ingest(client, risk_score=95, explanation=[])
+    alert = client.get(f"/api/v1/alerts/{first.alert.id}", headers=viewer_headers).json()
+
+    assert alert["risk_score"] == 95
+    assert [f["feature"] for f in alert["explanation"]] == ["packets_per_sec", "syn_ratio"]
+
+
 def test_benign_and_low_risk_detections_are_stored_without_alerts(client):
     benign = ingest(client, label="benign", risk_score=0)
     low_risk = ingest(client, risk_score=20)

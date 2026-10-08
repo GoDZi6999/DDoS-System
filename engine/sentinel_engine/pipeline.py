@@ -12,6 +12,8 @@ simulator behave exactly like live capture.
 
 import logging
 import math
+import os
+import socket
 import time
 from collections.abc import Iterable
 from datetime import UTC, datetime
@@ -30,6 +32,8 @@ logger = logging.getLogger(__name__)
 RULE_PORTSCAN = "rule:portscan-v1"
 RULE_CONFIDENCE = 0.9
 PROTOCOLS = {"tcp", "udp", "icmp"}
+# SHAP explanations per (attack label, destination) per second; see _explain_budget.
+EXPLAIN_PER_TARGET_S = 5
 
 
 def _finite(value: float) -> float:
@@ -47,6 +51,7 @@ class Engine:
         config_refresh_s: float = 10.0,
         portscan_min_ports: int = PORTSCAN_MIN_PORTS,
         heartbeat_file: Path | None = None,
+        explain_per_target_s: int = EXPLAIN_PER_TARGET_S,
     ) -> None:
         self.predictor = predictor
         self.publisher = publisher
@@ -55,6 +60,10 @@ class Engine:
         self.config_refresh_s = config_refresh_s
         self.portscan_min_ports = portscan_min_ports
         self.heartbeat_file = heartbeat_file
+        self.explain_per_target_s = explain_per_target_s
+        self.source_id = f"{socket.gethostname()}:{os.getpid()}"
+        self._explain_second = -1
+        self._explained: dict[tuple[str, str], int] = {}
         self.table = FlowTable()
         self.window = WindowStats()
         self.risk = RiskEngine()
@@ -146,7 +155,10 @@ class Engine:
         detections = []
         if records:
             frame = features.from_records([r["features"] for r in records])
-            predictions = self.predictor.predict(frame, explain="attacks")
+            predictions = self.predictor.predict(frame, explain="none")
+            self.predictor.explain_rows(
+                frame, predictions, self._explain_budget(records, predictions, now)
+            )
             for record, prediction in zip(records, predictions, strict=True):
                 src, dst = record["src_ip"], record["dst_ip"]
                 rate = self.window.dst_packet_rate(dst)
@@ -169,6 +181,26 @@ class Engine:
         self._tick["max_risk"] = max([self._tick["max_risk"], *(d["risk_score"] for d in attacks)])
         return detections
 
+    def _explain_budget(self, records: list[dict], predictions: list, now: float) -> list[int]:
+        """Pick the attack flows to explain. SHAP is the engine's main cost
+        (~10x a prediction), and a flood can bring thousands of near-identical
+        flows per second against one target, while an alert shows a single
+        explanation. So at most EXPLAIN_PER_TARGET_S attack flows per
+        (label, destination) are explained per second; the rest carry an empty
+        explanation, and the alert keeps the one it has."""
+        second = int(now)
+        if second != self._explain_second:
+            self._explain_second, self._explained = second, {}
+        rows = []
+        for row, (record, prediction) in enumerate(zip(records, predictions, strict=True)):
+            if not prediction.is_attack:
+                continue
+            key = (prediction.label, record["dst_ip"])
+            if self._explained.get(key, 0) < self.explain_per_target_s:
+                self._explained[key] = self._explained.get(key, 0) + 1
+                rows.append(row)
+        return rows
+
     def _refresh_config(self, now: float) -> None:
         if now < self._next_config:
             return
@@ -183,6 +215,9 @@ class Engine:
             "traffic.tick",
             {
                 "ts": datetime.fromtimestamp(now, UTC).isoformat(),
+                # Several engines can run at once (e.g. `inject` next to the
+                # main engine); dashboards add up ticks per second by source.
+                "source_id": self.source_id,
                 "flows_per_s": round(self._tick["flows"] / span, 2),
                 "packets_per_s": round(self._tick["packets"] / span, 2),
                 "attacks": self._tick["attacks"],

@@ -24,9 +24,11 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from app.core.config import get_settings
 from app.db.session import create_engine, create_sessionmaker
+from app.models import Alert
+from app.schemas.alert import AlertSummary
 from app.schemas.config import DetectionConfig
 from app.schemas.detection import Detection
-from app.services.alerts import ingest_detection, summarize
+from app.services.alerts import ingest_batch, summarize
 from app.services.detection_config import get_detection_config
 from app.services.notify import mirror_detection_config, publish
 
@@ -83,41 +85,79 @@ class AlertEngine:
         )
         await self.redis.xack(DETECTIONS_STREAM, CONSUMER_GROUP, entry_id)
 
-    async def handle(self, entry_id: str, fields: dict[bytes, bytes] | None) -> bool:
-        """Process one stream entry. Returns False on a transient failure, leaving
-        the entry pending so it is retried."""
-        raw = (fields or {}).get(b"data")
-        try:
-            detection = Detection.model_validate_json(raw or b"")
-        except ValidationError as exc:
-            await self._dead_letter(entry_id, raw, str(exc))
-            return True
+    async def _store(self, items: list[tuple[str, Detection]]) -> list[tuple[str, AlertSummary]]:
+        """Ingest detections in one transaction. Returns one notification per
+        alert touched (a flood updates its alert many times per batch)."""
+        async with self.sessionmaker() as session:
+            config = await self._detection_config(session)
+            touched: dict[int, tuple[bool, Alert]] = {}
+            for result in await ingest_batch(session, items, config):
+                if result.alert is not None:
+                    created = result.created or touched.get(result.alert.id, (False,))[0]
+                    touched[result.alert.id] = (created, result.alert)
+            await session.commit()
+            return [
+                ("alert.new" if created else "alert.updated", await summarize(session, alert))
+                for created, alert in touched.values()
+            ]
 
+    async def _store_one(self, entry_id: str, detection: Detection) -> bool:
         try:
-            async with self.sessionmaker() as session:
-                config = await self._detection_config(session)
-                result = await ingest_detection(session, detection, config, stream_id=entry_id)
-                await session.commit()
-                summary = await summarize(session, result.alert) if result.alert else None
+            notifications = await self._store([(entry_id, detection)])
         except IntegrityError:
-            # Only the unique stream id can collide: another consumer already stored it.
+            # Only the unique stream id can collide: it was already processed.
             logger.info("Entry %s was already processed", entry_id)
-            result, summary = None, None
+            notifications = []
         except (SQLAlchemyError, OSError):
             logger.exception("Database error while processing %s; will retry", entry_id)
             return False
-
         await self.redis.xack(DETECTIONS_STREAM, CONSUMER_GROUP, entry_id)
-        if result is not None and summary is not None:
-            event_type = "alert.new" if result.created else "alert.updated"
-            await publish(self.redis, event_type, summary.model_dump(mode="json"))
+        await self._notify(notifications)
         return True
+
+    async def _notify(self, notifications: list[tuple[str, AlertSummary]]) -> None:
+        for event_type, summary in notifications:
+            await publish(self.redis, event_type, summary.model_dump(mode="json"))
+
+    async def handle_batch(self, entries: list[tuple[str, dict[bytes, bytes] | None]]) -> bool:
+        """Process stream entries, normally in a single transaction. Returns
+        False on a transient failure, leaving unprocessed entries pending so
+        they are retried."""
+        items: list[tuple[str, Detection]] = []
+        for entry_id, fields in entries:
+            raw = (fields or {}).get(b"data")
+            try:
+                items.append((entry_id, Detection.model_validate_json(raw or b"")))
+            except ValidationError as exc:
+                await self._dead_letter(entry_id, raw, str(exc))
+        if not items:
+            return True
+        # Taking correlation locks in a fixed order keeps concurrent consumers
+        # from deadlocking; within one (type, target) the stream order is kept.
+        items.sort(key=lambda item: (item[1].label, str(item[1].dst_ip)))
+        try:
+            notifications = await self._store(items)
+        except IntegrityError:
+            # A redelivered entry is in the batch: fall back to one
+            # transaction per entry so the others are still stored.
+            for entry_id, detection in items:
+                if not await self._store_one(entry_id, detection):
+                    return False
+            return True
+        except (SQLAlchemyError, OSError):
+            logger.exception("Database error while processing %d entries; will retry", len(items))
+            return False
+        await self.redis.xack(DETECTIONS_STREAM, CONSUMER_GROUP, *(e for e, _ in items))
+        await self._notify(notifications)
+        return True
+
+    async def handle(self, entry_id: str, fields: dict[bytes, bytes] | None) -> bool:
+        return await self.handle_batch([(entry_id, fields)])
 
     async def _process(self, entries: list) -> bool:
-        for entry_id, fields in entries:
-            if not await self.handle(entry_id.decode(), fields):
-                return False
-        return True
+        return await self.handle_batch(
+            [(entry_id.decode(), fields) for entry_id, fields in entries]
+        )
 
     async def _claim_stale(self) -> bool:
         _, entries, _ = await self.redis.xautoclaim(

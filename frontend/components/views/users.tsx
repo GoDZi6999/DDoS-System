@@ -2,7 +2,7 @@
 import { useState } from "react";
 import useSWR from "swr";
 import { PageHeader } from "@/components/shell";
-import { Button, Card, Field, Notice, Skeleton, inputClass } from "@/components/ui";
+import { Button, Card, Field, Notice, Skeleton, inputBase, inputClass } from "@/components/ui";
 import { send } from "@/lib/api";
 import { formatTime } from "@/lib/format";
 import { hasRole, useMe } from "@/lib/user";
@@ -48,7 +48,7 @@ export function UsersView() {
           ) : (
             <div className="-mx-4 overflow-x-auto sm:mx-0">
               <table className="w-full min-w-[560px] text-left text-sm">
-                <thead className="text-xs text-muted">
+                <thead className="label-caps text-muted">
                   <tr className="border-b border-line">
                     <th className="px-4 py-2 font-medium sm:pl-0">User</th>
                     <th className="px-2 py-2 font-medium">Role</th>
@@ -71,7 +71,7 @@ export function UsersView() {
                           aria-label={`Role of ${user.username}`}
                           value={user.role}
                           onChange={(e) => update(user, { role: e.target.value as Role })}
-                          className={`${inputClass} w-auto py-1`}
+                          className={`${inputBase} w-auto py-1`}
                         >
                           {ROLES.map((r) => (
                             <option key={r.value} value={r.value}>

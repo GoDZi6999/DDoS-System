@@ -46,8 +46,8 @@ export default async function StatusPage() {
   return (
     <main className="mx-auto flex w-full max-w-3xl flex-1 flex-col gap-8 px-6 py-16">
       <header>
-        <p className="text-sm font-semibold uppercase tracking-widest text-accent">SentinelAI</p>
-        <h1 className="mt-2 text-3xl font-bold">System status</h1>
+        <p className="label-caps text-accent">SENTINEL//AI · public status</p>
+        <h1 className="mt-2 font-display text-3xl font-bold uppercase tracking-[0.1em]">System status</h1>
         <p className="mt-3 text-ink-2">
           Public health check: confirms that every service in the stack is reachable. It needs
           no login and shows no security data.
@@ -56,9 +56,9 @@ export default async function StatusPage() {
 
       <section
         aria-labelledby="status-heading"
-        className="rounded-xl border border-line bg-surface p-6"
+        className="hud p-6"
       >
-        <h2 id="status-heading" className="text-lg font-semibold">
+        <h2 id="status-heading" className="font-display text-lg font-semibold uppercase tracking-wider">
           {readiness?.status === "ready"
             ? "All systems operational"
             : "Degraded: some services are unavailable"}

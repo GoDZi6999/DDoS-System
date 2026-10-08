@@ -11,7 +11,8 @@ sentinel_ml/
   data.py        load CIC-IDS2017, map labels, clean, deduplicate, temporal split
   models.py      candidates: logistic regression (baseline), random forest, XGBoost;
                  each a Pipeline that starts with the shared FlowPreprocessor
-  train.py       CV -> fit -> evaluate -> bundle -> report
+  train.py       validate (real class mix) -> select -> refit -> evaluate -> bundle -> report
+  decision.py    optional per-class decision weights; calibration error
   evaluate.py    metrics (per-class P/R/F1, macro-F1, ROC-AUC, PR-AUC, detection
                  rate, false-positive rate, latency) and plots
   explain.py     SHAP explanations per prediction and global importance
@@ -29,6 +30,9 @@ About 20 minutes on 4 cores.
 python -m venv .venv && source .venv/bin/activate
 pip install -r ml/requirements.txt
 PYTHONPATH=ml python -m sentinel_ml train          # from the repo root
+# --tune-decisions   bundle tuned per-class decision weights (off by default, see
+#                    docs/ML_METHODOLOGY.md section 8)
+# --no-ablation      skip the run without TCP window features
 ```
 
 Output:

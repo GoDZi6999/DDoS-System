@@ -2,7 +2,7 @@
 import { useState } from "react";
 import useSWR from "swr";
 import { PageHeader } from "@/components/shell";
-import { Button, Card, Notice, Pagination, Skeleton, inputClass } from "@/components/ui";
+import { Button, Card, Notice, Pagination, Skeleton, inputBase } from "@/components/ui";
 import { formatTime } from "@/lib/format";
 import { hasRole, useMe } from "@/lib/user";
 import type { AuditEntry, Page } from "@/lib/types";
@@ -34,13 +34,13 @@ function Change({ before, after }: Pick<AuditEntry, "before" | "after">) {
       <summary className="cursor-pointer text-ink-2 hover:text-ink">Show change</summary>
       <div className="mt-2 grid gap-2 sm:grid-cols-2">
         {before && (
-          <pre className="overflow-x-auto rounded bg-ink/5 p-2 text-ink-2">
+          <pre className="overflow-x-auto rounded bg-accent/5 p-2 text-ink-2">
             <span className="text-muted">before </span>
             {JSON.stringify(before, null, 2)}
           </pre>
         )}
         {after && (
-          <pre className="overflow-x-auto rounded bg-ink/5 p-2 text-ink">
+          <pre className="overflow-x-auto rounded bg-accent/5 p-2 text-ink">
             <span className="text-muted">after </span>
             {JSON.stringify(after, null, 2)}
           </pre>
@@ -82,7 +82,7 @@ export function AuditView() {
               setAction(e.target.value);
               setOffset(0);
             }}
-            className={`${inputClass} w-auto`}
+            className={`${inputBase} w-auto`}
           >
             <option value="">All actions</option>
             {ACTIONS.map((a) => (
@@ -104,7 +104,7 @@ export function AuditView() {
               placeholder="Actor (username)"
               value={actorDraft}
               onChange={(e) => setActorDraft(e.target.value)}
-              className={`${inputClass} w-48`}
+              className={`${inputBase} w-48`}
             />
             <Button type="submit">Filter</Button>
           </form>
@@ -117,7 +117,7 @@ export function AuditView() {
           <>
             <div className="-mx-4 overflow-x-auto sm:mx-0">
               <table className="w-full min-w-[760px] text-left text-sm">
-                <thead className="text-xs text-muted">
+                <thead className="label-caps text-muted">
                   <tr className="border-b border-line">
                     <th className="px-4 py-2 font-medium sm:pl-0">Time</th>
                     <th className="px-2 py-2 font-medium">Actor</th>

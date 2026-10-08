@@ -19,24 +19,45 @@ DETECTIONS_STREAM = "sentinel:detections"
 EVENTS_CHANNEL = "sentinel:events"
 CONFIG_KEY = "sentinel:config:detection"
 STREAM_MAXLEN = 100_000
+# Detections kept in memory while Redis is unreachable (oldest dropped first).
+MAX_PENDING = 50_000
 
 
 class RedisPublisher:
     def __init__(self, url: str) -> None:
         self.redis = redis.Redis.from_url(url, socket_connect_timeout=5, socket_timeout=10)
+        self.pending: list[dict] = []
 
     def detections(self, items: list[dict]) -> None:
-        if not items:
+        """Send detections; if Redis is down, keep them (bounded) and retry
+        on the next call, so a short outage neither kills the engine (and its
+        flow, window and baseline state) nor loses detections. If a pipeline
+        fails part-way, entries already written may be sent again."""
+        self.pending.extend(items)
+        if not self.pending:
             return
         pipe = self.redis.pipeline(transaction=False)
-        for item in items:
+        for item in self.pending:
             pipe.xadd(
                 DETECTIONS_STREAM,
                 {"data": json.dumps(item)},
                 maxlen=STREAM_MAXLEN,
                 approximate=True,
             )
-        pipe.execute()
+        try:
+            pipe.execute()
+        except RedisError:
+            dropped = max(len(self.pending) - MAX_PENDING, 0)
+            if dropped:
+                self.pending = self.pending[dropped:]
+            logger.warning(
+                "Redis unavailable: %d detections buffered, %d dropped",
+                len(self.pending),
+                dropped,
+                exc_info=True,
+            )
+            return
+        self.pending = []
 
     def event(self, event_type: str, data: dict) -> None:
         try:

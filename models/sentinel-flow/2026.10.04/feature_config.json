@@ -1,0 +1,198 @@
+{
+  "features": [
+    {
+      "name": "flow_duration_s",
+      "description": "Flow duration (s)",
+      "cic_column": "Flow Duration"
+    },
+    {
+      "name": "fwd_packets",
+      "description": "Packets client -> server",
+      "cic_column": "Total Fwd Packets"
+    },
+    {
+      "name": "bwd_packets",
+      "description": "Packets server -> client",
+      "cic_column": "Total Backward Packets"
+    },
+    {
+      "name": "fwd_bytes",
+      "description": "Payload bytes client -> server",
+      "cic_column": "Total Length of Fwd Packets"
+    },
+    {
+      "name": "bwd_bytes",
+      "description": "Payload bytes server -> client",
+      "cic_column": "Total Length of Bwd Packets"
+    },
+    {
+      "name": "fwd_pkt_len_max",
+      "description": "Largest forward packet (bytes)",
+      "cic_column": "Fwd Packet Length Max"
+    },
+    {
+      "name": "fwd_pkt_len_min",
+      "description": "Smallest forward packet (bytes)",
+      "cic_column": "Fwd Packet Length Min"
+    },
+    {
+      "name": "fwd_pkt_len_mean",
+      "description": "Mean forward packet size (bytes)",
+      "cic_column": "Fwd Packet Length Mean"
+    },
+    {
+      "name": "fwd_pkt_len_std",
+      "description": "Forward packet size std (bytes)",
+      "cic_column": "Fwd Packet Length Std"
+    },
+    {
+      "name": "bwd_pkt_len_max",
+      "description": "Largest backward packet (bytes)",
+      "cic_column": "Bwd Packet Length Max"
+    },
+    {
+      "name": "bwd_pkt_len_min",
+      "description": "Smallest backward packet (bytes)",
+      "cic_column": "Bwd Packet Length Min"
+    },
+    {
+      "name": "bwd_pkt_len_mean",
+      "description": "Mean backward packet size (bytes)",
+      "cic_column": "Bwd Packet Length Mean"
+    },
+    {
+      "name": "bwd_pkt_len_std",
+      "description": "Backward packet size std (bytes)",
+      "cic_column": "Bwd Packet Length Std"
+    },
+    {
+      "name": "flow_bytes_per_s",
+      "description": "Payload bytes per second (recomputed)",
+      "cic_column": null
+    },
+    {
+      "name": "flow_packets_per_s",
+      "description": "Packets per second (recomputed)",
+      "cic_column": null
+    },
+    {
+      "name": "flow_iat_mean",
+      "description": "Mean inter-arrival time (s)",
+      "cic_column": "Flow IAT Mean"
+    },
+    {
+      "name": "flow_iat_std",
+      "description": "Inter-arrival time std (s)",
+      "cic_column": "Flow IAT Std"
+    },
+    {
+      "name": "flow_iat_max",
+      "description": "Longest inter-arrival time (s)",
+      "cic_column": "Flow IAT Max"
+    },
+    {
+      "name": "flow_iat_min",
+      "description": "Shortest inter-arrival time (s)",
+      "cic_column": "Flow IAT Min"
+    },
+    {
+      "name": "fwd_iat_total",
+      "description": "Forward inter-arrival total (s)",
+      "cic_column": "Fwd IAT Total"
+    },
+    {
+      "name": "fwd_iat_mean",
+      "description": "Forward inter-arrival mean (s)",
+      "cic_column": "Fwd IAT Mean"
+    },
+    {
+      "name": "bwd_iat_total",
+      "description": "Backward inter-arrival total (s)",
+      "cic_column": "Bwd IAT Total"
+    },
+    {
+      "name": "bwd_iat_mean",
+      "description": "Backward inter-arrival mean (s)",
+      "cic_column": "Bwd IAT Mean"
+    },
+    {
+      "name": "fwd_psh_flags",
+      "description": "Forward packets with PSH",
+      "cic_column": "Fwd PSH Flags"
+    },
+    {
+      "name": "fin_flag_count",
+      "description": "Packets with FIN",
+      "cic_column": "FIN Flag Count"
+    },
+    {
+      "name": "syn_flag_count",
+      "description": "Packets with SYN",
+      "cic_column": "SYN Flag Count"
+    },
+    {
+      "name": "rst_flag_count",
+      "description": "Packets with RST",
+      "cic_column": "RST Flag Count"
+    },
+    {
+      "name": "psh_flag_count",
+      "description": "Packets with PSH",
+      "cic_column": "PSH Flag Count"
+    },
+    {
+      "name": "ack_flag_count",
+      "description": "Packets with ACK",
+      "cic_column": "ACK Flag Count"
+    },
+    {
+      "name": "urg_flag_count",
+      "description": "Packets with URG",
+      "cic_column": "URG Flag Count"
+    },
+    {
+      "name": "init_win_bytes_fwd",
+      "description": "First forward TCP window (-1: none)",
+      "cic_column": "Init_Win_bytes_forward"
+    },
+    {
+      "name": "init_win_bytes_bwd",
+      "description": "First backward TCP window (-1: none)",
+      "cic_column": "Init_Win_bytes_backward"
+    },
+    {
+      "name": "pkt_len_mean",
+      "description": "Mean packet size (bytes)",
+      "cic_column": "Packet Length Mean"
+    },
+    {
+      "name": "pkt_len_std",
+      "description": "Packet size std (bytes)",
+      "cic_column": "Packet Length Std"
+    },
+    {
+      "name": "down_up_ratio",
+      "description": "Backward/forward packet ratio",
+      "cic_column": "Down/Up Ratio"
+    },
+    {
+      "name": "active_mean",
+      "description": "Mean active period (s)",
+      "cic_column": "Active Mean"
+    },
+    {
+      "name": "idle_mean",
+      "description": "Mean idle period (s)",
+      "cic_column": "Idle Mean"
+    }
+  ],
+  "classes": [
+    "benign",
+    "ddos",
+    "dos",
+    "portscan",
+    "bruteforce",
+    "webattack",
+    "botnet"
+  ]
+}
