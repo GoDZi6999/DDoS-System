@@ -253,6 +253,13 @@ with the event so a redelivery is not stored twice; invalid entries are moved
 to `sentinel:detections:dead` with the validation error; entries left pending
 by a crashed consumer are reclaimed after 60 seconds.
 
+## Analysis API (separate service)
+
+Other applications can classify flow records or packet captures (Wireshark
+`.pcapng`, tcpdump `.pcap`) without the dashboard, through the engine's
+stateless analysis API (`POST /v1/analyze`, `POST /v1/analyze/pcap`, API keys
+per tenant). See [`engine/README.md`](../engine/README.md#analysis-api).
+
 ## Operational commands
 
 | Command | Purpose |

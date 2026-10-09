@@ -86,18 +86,26 @@ def decode(fields: dict, now: float | None = None) -> tuple[str, dict] | None:
         data = json.loads(raw)
     except (ValueError, UnicodeDecodeError):
         return None
-    if version != PROTOCOL_VERSION or not SENSOR_NAME.match(sensor) or not isinstance(data, dict):
+    if version != PROTOCOL_VERSION or not SENSOR_NAME.match(sensor):
         return None
-
     now = time.time() if now is None else now
+    record = parse_record(data, now - MAX_CLOCK_SKEW_S, now + MAX_CLOCK_SKEW_S)
+    return None if record is None else (sensor, record)
+
+
+def parse_record(data, earliest: float = 0.0, latest: float = 1e11) -> dict | None:
+    """Validate one flow record (flows.Flow.record() format); None when it is
+    malformed. Timestamps must fall within [earliest, latest]."""
+    if not isinstance(data, dict):
+        return None
     record = {
         "src_ip": _ip(data.get("src_ip")),
         "dst_ip": _ip(data.get("dst_ip")),
         "src_port": _integer(data.get("src_port"), 0, 65_535),
         "dst_port": _integer(data.get("dst_port"), 0, 65_535),
         "protocol": data.get("protocol") if data.get("protocol") in PROTOCOLS else None,
-        "start": _number(data.get("start"), now - MAX_CLOCK_SKEW_S, now + MAX_CLOCK_SKEW_S),
-        "end": _number(data.get("end"), now - MAX_CLOCK_SKEW_S, now + MAX_CLOCK_SKEW_S),
+        "start": _number(data.get("start"), earliest, latest),
+        "end": _number(data.get("end"), earliest, latest),
         "packet_count": _integer(data.get("packet_count"), 1, 10**9),
         "byte_count": _integer(data.get("byte_count"), 0, 10**13),
         "duration": _number(data.get("duration"), 0.0, MAX_FLOW_S),
@@ -115,4 +123,4 @@ def decode(fields: dict, now: float | None = None) -> tuple[str, dict] | None:
             return None
         clean[name] = number
     record["features"] = clean
-    return sensor, record
+    return record

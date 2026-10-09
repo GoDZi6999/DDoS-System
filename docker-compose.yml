@@ -187,6 +187,32 @@ services:
     networks: [corenet]
     restart: unless-stopped
 
+  # Analysis API for other applications (engine/README.md#analysis-api):
+  # `docker compose --profile api up -d analysis-api`. Stateless; needs
+  # ARGUS_API_KEYS (python -m sentinel_engine api-key --name <tenant>).
+  analysis-api:
+    image: sentinelai-engine:latest
+    profiles: [api]
+    command: ["python", "-m", "sentinel_engine", "serve", "--port", "8100"]
+    environment:
+      MODEL_BUNDLE: ${MODEL_BUNDLE:-models/sentinel-flow/2026.10.03}
+      ARGUS_API_KEYS: ${ARGUS_API_KEYS:-}  # the API refuses to start without keys
+      ARGUS_API_RATE_PER_MINUTE: ${ARGUS_API_RATE_PER_MINUTE:-60}
+    ports:
+      - "127.0.0.1:${ANALYSIS_API_PORT:-8100}:8100"
+    healthcheck:
+      test:
+        - CMD
+        - python
+        - -c
+        - "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8100/health', timeout=2)"
+      interval: 10s
+      timeout: 3s
+      retries: 3
+      start_period: 30s
+    networks: [frontnet]
+    restart: unless-stopped
+
   # Sends queued alert notifications (with retries) and applies data retention.
   notifier:
     <<: *backend

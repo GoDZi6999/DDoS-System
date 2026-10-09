@@ -13,6 +13,9 @@ live capture / PCAP replay / simulator / capture sensors (flow records via Redis
    -> Redis: sentinel:detections stream (alert engine), traffic.tick events (dashboards)
 ```
 
+The same pipeline also runs on demand, without Redis: `analyze` reports on a capture
+file and `serve` exposes it as an authenticated API (sections below).
+
 Detections follow the contract in [`docs/schemas/detection.schema.json`](../docs/schemas/detection.schema.json);
 the tests validate the engine's output against it.
 
@@ -127,6 +130,60 @@ The thresholds are in `window.py` (`BEACON_*`).
 In the simulator, the botnet phase is six infected clients each polling the C2
 server every 2 s with 2% jitter.
 
+## Wireshark captures
+
+Wireshark (`.pcapng`), dumpcap and tcpdump (`.pcap`) captures go through the same
+flow builder, classifier, rules and risk score as live traffic:
+
+```bash
+# Offline report, no Redis needed; original capture timestamps are kept.
+python -m sentinel_engine analyze --pcap capture.pcapng          # readable summary
+python -m sentinel_engine analyze --pcap capture.pcapng --json   # full report
+# Or replay into the running dashboard (timestamps shifted to now):
+python -m sentinel_engine run --source pcap --pcap capture.pcapng
+```
+
+Every detection the report lists comes with a **Wireshark display filter** for the
+packets behind it (both directions), for example
+`ip.addr == 203.0.113.99 && ip.addr == 10.20.0.13 && tcp`. Paste it into Wireshark's
+filter bar on the same capture to see exactly what was flagged. The dashboard's alert
+page shows the same filter with a copy button. Filters were checked with `tshark -Y`.
+
+On Windows, the capture sensor and `--source live` use Npcap, which Wireshark
+installs, so a machine with Wireshark can also run a sensor.
+
+## Analysis API
+
+Detection as a service for other applications, for example a cloud workload that
+wants a verdict on its traffic. It is stateless: nothing is stored, shown on the
+dashboard or blocked, and the recommended actions are advisory.
+
+| Endpoint | Input | Output |
+|---|---|---|
+| `GET /health` | (no key) | status, model version |
+| `POST /v1/analyze` | JSON `{"flows": [...]}`, up to 10,000 flow records in the capture sensors' format ([`flowstream.py`](sentinel_engine/flowstream.py)) | one detection per flow (`flow_index` = position in the request), then rule detections (port scans, beaconing) found across the batch |
+| `POST /v1/analyze/pcap` | multipart file `capture` (`.pcap`/`.pcapng`, up to 50 MB); `?include_benign=true` for every flow | summary and attack detections (at most 1,000, `truncated` says if more) |
+
+Each detection has the dashboard's fields (label, confidence, class probabilities,
+SHAP explanation, risk score and components) plus `severity`, `recommended_action`
+and `wireshark_filter`. The summary counts detections by type and severity and
+lists the top sources and targets. OpenAPI docs: `/docs`.
+
+Keys: each client (tenant) gets its own key; only SHA-256 hashes are configured.
+
+```bash
+python -m sentinel_engine api-key --name acme       # prints the key (once) and the hash entry
+export ARGUS_API_KEYS="acme:<hash>,other:<hash>"    # or in .env for Docker Compose
+python -m sentinel_engine serve --port 8100         # or: docker compose --profile api up -d analysis-api
+curl -H "X-API-Key: <key>" -F capture=@capture.pcapng http://localhost:8100/v1/analyze/pcap
+```
+
+Requests without a valid key get 401, and more than `ARGUS_API_RATE_PER_MINUTE`
+(default 60) requests per key per minute get 429 with `Retry-After`. The server
+refuses to start without keys. Analyses run one at a time per process; scale out
+with more replicas behind a load balancer. Put TLS in front of it (a reverse proxy
+or the cloud's load balancer) before exposing it beyond localhost.
+
 ## Risk score
 
 `risk = 0.40·ml_confidence + 0.25·traffic_anomaly + 0.25·attack_severity + 0.10·source_reputation`
@@ -178,6 +235,6 @@ numbers and method: [`docs/PERFORMANCE.md`](../docs/PERFORMANCE.md).
 
 ```bash
 cd engine && pip install -r requirements-dev.txt
-pytest          # flow features, window/rule, risk, PCAP replay, sensors, end-to-end, contract
+pytest          # flow features, window/rules, risk, PCAP replay, sensors, end-to-end, contract, analysis API
 ruff check . && ruff format --check .
 ```

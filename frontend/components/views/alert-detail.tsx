@@ -23,6 +23,7 @@ import {
   formatPercent,
   formatTime,
   target,
+  wiresharkFilter,
 } from "@/lib/format";
 import { hasRole, useMe } from "@/lib/user";
 import type { AlertDetail, AlertStatus, EventSummary, Page } from "@/lib/types";
@@ -199,6 +200,18 @@ function Facts({ alert }: { alert: AlertDetail }) {
     ["Source", <>{alert.source_ip}{alert.unique_sources > 1 && <span className="text-muted"> +{alert.unique_sources - 1} more</span>}</>],
     ["Target", target(alert.destination_ip, alert.destination_port)],
     ["Protocol", alert.protocol.toUpperCase()],
+    [
+      "Wireshark",
+      <CopyFilter
+        key="w"
+        value={wiresharkFilter(
+          alert.source_ip,
+          alert.destination_ip,
+          alert.protocol,
+          alert.destination_port,
+        )}
+      />,
+    ],
     ["Confidence", formatPercent(alert.confidence)],
     ["Peak packets", `${formatCount(alert.peak_packets_per_sec)}/s`],
     ["Peak bandwidth", formatBytesRate(alert.peak_bytes_per_sec)],
@@ -223,6 +236,29 @@ function Facts({ alert }: { alert: AlertDetail }) {
         </div>
       ))}
     </dl>
+  );
+}
+
+function CopyFilter({ value }: { value: string }) {
+  const [copied, setCopied] = useState(false);
+  return (
+    <span className="inline-flex items-center justify-end gap-2">
+      <code className="text-xs" title="Paste into Wireshark's display filter bar">
+        {value}
+      </code>
+      <button
+        type="button"
+        className="label-caps shrink-0 text-accent hover:underline"
+        onClick={() =>
+          navigator.clipboard?.writeText(value).then(() => {
+            setCopied(true);
+            setTimeout(() => setCopied(false), 1500);
+          })
+        }
+      >
+        {copied ? "Copied" : "Copy"}
+      </button>
+    </span>
   );
 }
 
