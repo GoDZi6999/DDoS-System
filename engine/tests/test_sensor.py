@@ -212,6 +212,9 @@ def mutate(entry: dict, **changes) -> dict:
         {"f_syn_flag_count": "2"},
         {"f_syn_flag_count": float("nan")},
         {"f_extra_feature": 1},
+        {"preview": "yes"},
+        {"previewed": 1},
+        {"preview": True, "previewed": True},
     ],
 )
 def test_malformed_records_are_rejected(change):
@@ -226,11 +229,25 @@ def test_malformed_envelopes_are_rejected():
     del data["features"]["syn_flag_count"]
 
     assert flowstream.decode({**entry, "data": json.dumps(data)}, T0) is None
-    assert flowstream.decode({**entry, "v": "2"}, T0) is None
+    assert flowstream.decode({**entry, "v": "3"}, T0) is None
     assert flowstream.decode({**entry, "sensor": "../etc"}, T0) is None
     assert flowstream.decode({**entry, "data": "{"}, T0) is None
     assert flowstream.decode({**entry, "data": " " * 20_000}, T0) is None
     assert flowstream.decode({}, T0) is None
+
+
+def test_preview_flags_round_trip_and_need_protocol_2():
+    entry = valid_entry()
+    assert entry["v"] == "2"
+    preview = mutate(entry, preview=True, previewed=False)
+
+    _, record = flowstream.decode(preview, T0)
+    assert record["preview"] is True and record["previewed"] is False
+    _, plain = flowstream.decode(mutate(entry, **{}), T0)
+    assert plain["preview"] is False
+    assert flowstream.decode({**preview, "v": "1"}, T0) is None
+    # Finished flows from version 1 senders (e.g. /v2/flows) still decode.
+    assert flowstream.decode({**entry, "v": "1"}, T0) is not None
 
 
 def test_sensor_source_acks_skips_garbage_and_replays_unacked_entries():

@@ -280,3 +280,28 @@ def test_syn_flood_is_caught_by_the_flood_rule(predictor):
     assert rule[0]["explanation"][0]["feature"] == "flood_half_open_flows_per_s"
     legit = [d for d in published if d["src_ip"].startswith("192.168.10.")]
     assert legit and all(d["label"] == "benign" for d in legit)
+
+
+def test_open_flood_flows_are_reported_from_previews_once(predictor):
+    """Flows stay open for up to 120 s, like CICFlowMeter's, so a SYN flood's
+    half-open flows are reported from their previews instead of at the end."""
+    publisher = MemoryPublisher()
+    engine = Engine(predictor, publisher, "pcap")
+    start = T0 + 2
+    for i in range(2000):  # 200 SYNs/s for 10 s, no handshake completes
+        src, sport, ts = f"10.{i // 250}.{i % 250}.9", 1024 + i, start + i * 0.005
+        engine.table.add(Packet(ts, src, SERVER, sport, 80, "tcp", 0, "S", 64240))
+    for second in range(1, 17):  # the engine sweeps every second
+        engine.handle_flows(engine.table.sweep(start + second), start + second)
+        if second == 6:
+            early = list(publisher.published)
+
+    # 5 s after the first SYN, with every flow still open, the flood is out.
+    assert early and all(d["model_version"] == RULE_FLOOD for d in early)
+    assert len(engine.table) == 2000
+
+    engine.handle_flows(engine.table.sweep(start + 130), start + 130)  # flows time out
+    flows = Counter((d["src_ip"], d["src_port"]) for d in publisher.published)
+    assert max(flows.values()) == 1  # no flow is reported twice
+    rule = [d for d in publisher.published if d["model_version"] == RULE_FLOOD]
+    assert len(rule) / len(publisher.published) > 0.9  # all but the ramp-up

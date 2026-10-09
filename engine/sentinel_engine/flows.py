@@ -13,23 +13,38 @@ flows are comparable with CIC-IDS2017:
 - flag counts include both directions; `fwd_psh_flags` only forward packets;
 - initial windows are the TCP window of the first packet per direction
   (-1 when there is none);
-- a gap longer than ACTIVITY_GAP_S separates active periods; active/idle
-  means are 0 for flows without such a gap;
-- a flow ends on RST, after FIN in both directions, after IDLE_TIMEOUT_S of
-  silence, or after ACTIVE_TIMEOUT_S in total.
+- a gap longer than ACTIVITY_GAP_S (CICFlowMeter's activity timeout, 5 s)
+  separates active periods; active/idle means are 0 for flows without such
+  a gap;
+- a flow ends on RST, after FIN in both directions, or FLOW_TIMEOUT_S after
+  its first packet (CICFlowMeter's flow timeout, 120 s). Silence alone does
+  not end a flow, as in CICFlowMeter: a connection that pauses for 30 s stays
+  one flow with an idle period, which is what the model was trained on.
+
+Holding flows for up to 120 s delays the finished record, so the table also
+emits one early *preview* of each flow still open PREVIEW_AFTER_S after its
+first packet (`"preview": True`). Previews feed the engine's cross-flow
+rules (scans, floods, beacons), which only need to know a flow exists, and
+are never classified: the model only sees finished flows. The finished
+record of a previewed flow carries `"previewed": True`.
 
 Exact equivalence with CICFlowMeter still has to be validated on a sample
 capture (see docs/ML_METHODOLOGY.md, threats to validity).
 """
 
+import heapq
 import math
 from dataclasses import dataclass, field
 
 from sentinel_engine.packets import Packet
 
-IDLE_TIMEOUT_S = 5.0
-ACTIVE_TIMEOUT_S = 120.0
+FLOW_TIMEOUT_S = 120.0
 ACTIVITY_GAP_S = 5.0
+PREVIEW_AFTER_S = 5.0
+# Open flows are held for up to FLOW_TIMEOUT_S, so a flood of spoofed SYNs
+# would grow the table without bound. Past this many, the flows silent the
+# longest are finished early (CICFlowMeter has no such cap).
+MAX_FLOWS = 100_000
 
 FlowKey = tuple[tuple[str, int], tuple[str, int], str]
 
@@ -91,6 +106,7 @@ class Flow:
     fin_fwd: bool = False
     fin_bwd: bool = False
     reset: bool = False
+    previewed: bool = False
     active: RunningStats = field(default_factory=RunningStats)
     idle: RunningStats = field(default_factory=RunningStats)
     active_start: float = 0.0
@@ -212,7 +228,13 @@ class Flow:
             "byte_count": int(payload),
             "duration": duration,
             "features": self.features(),
+            "previewed": self.previewed,
         }
+
+    def preview(self) -> dict:
+        """The flow so far, for the cross-flow rules; marks it previewed."""
+        self.previewed = True
+        return self.record() | {"preview": True, "previewed": False}
 
 
 def flow_key(p: Packet) -> FlowKey:
@@ -222,11 +244,16 @@ def flow_key(p: Packet) -> FlowKey:
 
 class FlowTable:
     def __init__(
-        self, idle_timeout: float = IDLE_TIMEOUT_S, active_timeout: float = ACTIVE_TIMEOUT_S
+        self,
+        flow_timeout: float = FLOW_TIMEOUT_S,
+        preview_after: float | None = PREVIEW_AFTER_S,
+        max_flows: int = MAX_FLOWS,
     ) -> None:
-        self.idle_timeout = idle_timeout
-        self.active_timeout = active_timeout
+        self.flow_timeout = flow_timeout
+        self.preview_after = preview_after
+        self.max_flows = max_flows
         self.flows: dict[FlowKey, Flow] = {}
+        self._expired: list[Flow] = []
 
     def __len__(self) -> int:
         return len(self.flows)
@@ -234,13 +261,19 @@ class FlowTable:
     def add(self, p: Packet) -> None:
         key = flow_key(p)
         flow = self.flows.get(key)
+        if flow is not None and p.ts - flow.start > self.flow_timeout:
+            # Like CICFlowMeter, a packet past the timeout ends the flow and
+            # opens the next one, whenever the table is next swept.
+            self._expired.append(flow)
+            flow = None
         if flow is None or (flow.finished and flow.last < p.ts - 1.0):
             self.flows[key] = Flow.open(p)
         else:
             flow.add(p)
 
     def sweep(self, now: float) -> list[dict]:
-        """Remove and return flows that are finished or timed out.
+        """Remove and return flows that are finished or timed out, plus
+        previews of flows open longer than `preview_after`.
 
         Finished flows wait for one sweep so the trailing ACK of a FIN
         exchange joins its flow instead of opening a new one.
@@ -248,13 +281,26 @@ class FlowTable:
         done = [
             key
             for key, flow in self.flows.items()
-            if (flow.finished and now - flow.last >= 0.5)
-            or now - flow.last >= self.idle_timeout
-            or now - flow.start >= self.active_timeout
+            if (flow.finished and now - flow.last >= 0.5) or now - flow.start >= self.flow_timeout
         ]
-        return [self.flows.pop(key).record() for key in done]
+        records = [flow.record() for flow in self._expired]
+        self._expired = []
+        records += [self.flows.pop(key).record() for key in done]
+        overflow = len(self.flows) - self.max_flows
+        if overflow > 0:
+            stale = heapq.nsmallest(overflow, self.flows, key=lambda k: self.flows[k].last)
+            records += [self.flows.pop(key).record() for key in stale]
+        if self.preview_after is not None:
+            records += [
+                flow.preview()
+                for flow in self.flows.values()
+                if not flow.previewed and now - flow.start >= self.preview_after
+            ]
+        return records
 
     def flush(self) -> list[dict]:
-        records = [flow.record() for flow in self.flows.values()]
+        records = [flow.record() for flow in self._expired]
+        records += [flow.record() for flow in self.flows.values()]
+        self._expired = []
         self.flows.clear()
         return records

@@ -16,6 +16,24 @@ live capture / PCAP replay / simulator / capture sensors (flow records via Redis
 Detections follow the contract in [`docs/schemas/detection.schema.json`](../docs/schemas/detection.schema.json);
 the tests validate the engine's output against it.
 
+## Flows
+
+The flow builder cuts traffic into flows the way CICFlowMeter, which made the
+training data, does: a flow ends on RST, on FIN in both directions, or 120 s
+after its first packet. A pause does not end a flow; a gap of more than 5 s is
+recorded as an idle period (the `active_mean` and `idle_mean` features). Until
+October 2026 flows also ended after 5 s of silence, so live flows were cut
+shorter than training flows, those two features were almost always 0, and a
+slow attack such as slowloris arrived as many small flows.
+
+Because a flow can now stay open for two minutes, the builder sends one early
+**preview** of every flow still open 5 s after its first packet. Previews feed
+the cross-flow rules below, which only need to know a flow exists, so a SYN
+flood (whose half-open flows never finish) is still reported within seconds.
+Previews are never classified; the model only sees finished flows. The table
+holds at most 100,000 open flows: past that, the flows silent the longest are
+finished early, so a flood of spoofed SYNs cannot exhaust memory.
+
 ## Sources
 
 | Source | Command | Notes |
@@ -125,10 +143,12 @@ whole flood; flows the model already flagged keep the model's verdict. A
 server's ordinary clients are not counted (a busy site with many light clients
 is not a flood), but the thresholds are absolute: a proxy or load balancer
 that legitimately opens more than 50 connections per second to one backend
-needs them raised (`FLOOD_*` in `window.py`). Known gaps: a flood carried by
-one long-lived flow (an ICMP ping flood, one UDP 5-tuple) only reaches the
-rule when the flow ends, and the first seconds of a flood, before it crosses
-the threshold, keep the model's verdict.
+needs them raised (`FLOOD_*` in `window.py`). Flood flows still open are
+reported from their preview, and their finished record is not reported again
+unless the model flags it. Known gaps: a flood carried by one long-lived flow
+(an ICMP ping flood from one host, one UDP 5-tuple) is a single flow, which a
+rule counting new flows cannot see, and the first seconds of a flood, before it
+crosses the threshold, keep the model's verdict.
 
 The beaconing rule covers the classifier's least stable class: botnet recall on the
 test set ranges from 0.68 to 0.92 across training recipes
@@ -136,7 +156,9 @@ test set ranges from 0.68 to 0.92 across training recipes
 while a bot polling its command-and-control server keeps a rhythm that per-flow
 statistics cannot see. Legitimate periodic traffic (health checks, telemetry,
 monitoring agents) has the same rhythm, so treat a beaconing alert as "worth a
-look" and tune or suppress known pollers. It has not been measured on labelled
+look" and tune or suppress known pollers. A bot that polls over one
+persistent connection is one flow, not a series, so the rule cannot see its
+rhythm. It has not been measured on labelled
 traffic: CIC-IDS2017's MachineLearningCVE files carry no addresses or timestamps.
 The thresholds are in `window.py` (`BEACON_*`).
 

@@ -147,7 +147,14 @@ sizes, then inter-arrival-time statistics and packet sizes.
   candidate for future training.
 - **Feature parity with CICFlowMeter.** The Phase 5 Scapy flow builder must
   reproduce CICFlowMeter's definitions; it will be validated against
-  CICFlowMeter output on a sample capture.
+  CICFlowMeter output on a sample capture. One mismatch was found by reading
+  the code (2026-10-09): live flows ended after 5 s of silence, while
+  CICFlowMeter only ends a flow 120 s after its first packet and treats a
+  5 s gap as an idle period. Live `active_mean`/`idle_mean` were therefore
+  almost always 0 and slow DoS attacks were split into many short flows. The
+  flow builder now uses CICFlowMeter's timeouts (see
+  [`engine/README.md`](../engine/README.md#flows)); the parity check will show
+  what other differences remain.
 - **Handshake-dependent flood detection (observed 2026-10-09).** Synthetic
   HTTP floods built with Scapy and replayed through the engine's flow builder
   (as in `backend/app/services/demo_capture.py`) are classified `ddos` only
