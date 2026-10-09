@@ -69,6 +69,10 @@ class Settings(BaseSettings):
     # Model bundle for /v2/detect. Unset: the default bundle in the repository
     # (the Docker image sets it). Needs the ML stack (ml/requirements.txt).
     model_bundle: str | None = None
+    # Uploaded packet captures (POST /api/v1/captures), shared by the API and the
+    # capture worker. Relative paths are from the working directory.
+    capture_dir: str = "captures"
+    capture_max_mb: int = Field(100, ge=1, le=2048)
 
     @field_validator(
         "jwt_secret",

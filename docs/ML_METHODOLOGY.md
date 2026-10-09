@@ -148,6 +148,19 @@ sizes, then inter-arrival-time statistics and packet sizes.
 - **Feature parity with CICFlowMeter.** The Phase 5 Scapy flow builder must
   reproduce CICFlowMeter's definitions; it will be validated against
   CICFlowMeter output on a sample capture.
+- **Handshake-dependent flood detection (observed 2026-10-09).** Synthetic
+  HTTP floods built with Scapy and replayed through the engine's flow builder
+  (as in `backend/app/services/demo_capture.py`) are classified `ddos` only
+  when each connection is captured mid-stream, as CIC-IDS2017's LOIC flows
+  mostly are (their median `syn_flag_count` is 0). The same flood with every
+  TCP handshake in the capture is classified benign, and so is a plain SYN
+  flood (one-packet flows). SHAP on the detected shape ranks the server's and
+  client's initial TCP windows first. Real captures usually contain the
+  handshakes, so floods can be missed. This supports the shortcut concern
+  above and makes the flow-builder parity check and a flood-rate rule the
+  next priorities. `python -m app.cli demo-capture` builds the mid-stream
+  shape on purpose, so the demo exercises the pipeline rather than this
+  weakness.
 - **Adversarial robustness** is not evaluated: crafted traffic can evade
   flow-statistics models.
 - SHAP explains the model's reasoning, not ground-truth causality.

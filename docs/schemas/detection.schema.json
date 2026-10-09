@@ -66,6 +66,20 @@
       "title": "Bytes Per Sec",
       "type": "number"
     },
+    "capture_id": {
+      "anyOf": [
+        {
+          "minimum": 1,
+          "type": "integer"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "Uploaded capture the flow came from (source pcap)",
+      "title": "Capture Id"
+    },
     "class_probs": {
       "maxProperties": 50,
       "patternProperties": {

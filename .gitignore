@@ -27,6 +27,10 @@ data/processed/
 *.pcapng
 !data/samples/*.pcap
 !data/samples/*.pcapng
+# Uploaded captures when the API runs outside Docker (CAPTURE_DIR).
+backend/captures/
+# Redis snapshots from local test runs.
+dump.rdb
 
 # --- Model artefacts: versioned bundles live under models/<name>/<version>/ ---
 models/*

@@ -99,7 +99,23 @@ latency.
 
 ![Grafana operations dashboard](images/grafana.png)
 
-## 8. Replay your own capture
+## 8. Analyze a Wireshark capture
+
+Open **Captures**, choose a `.pcap` or `.pcapng` file (in Wireshark: File ›
+Save As) and click **Upload and analyze**. The report lists packets, flows,
+attack types, top sources and targets. With "Raise alerts" on, attacks found
+appear in **Alerts**; each such alert has a **Wireshark** card with a display
+filter and **Download packets (.pcap)**, which opens the alert's packets in
+Wireshark with their original timestamps.
+
+No capture at hand? Generate a synthetic one (web traffic, a port scan and an
+HTTP flood):
+
+```bash
+docker compose exec -T backend python -m app.cli demo-capture - > demo.pcap
+```
+
+The engine can also replay a capture from the command line:
 
 ```bash
 docker compose cp capture.pcap engine:/tmp/capture.pcap

@@ -1,5 +1,7 @@
 -r requirements.txt
 # The ML stack, so the tests can exercise /v2/detect with the real model.
 -r ../ml/requirements.txt
+# The engine and Scapy, for packet capture analysis (app/services/capture_analysis.py).
+scapy==2.8.0
 pytest==9.1.1
 ruff==0.16.10

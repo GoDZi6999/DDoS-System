@@ -52,3 +52,6 @@ class Detection(BaseModel):
     risk_score: int = Field(ge=0, le=100)
     risk_components: dict[FeatureName, float] = Field(default_factory=dict, max_length=10)
     model_version: str = Field(min_length=1, max_length=64)
+    capture_id: int | None = Field(
+        default=None, ge=1, description="Uploaded capture the flow came from (source pcap)"
+    )

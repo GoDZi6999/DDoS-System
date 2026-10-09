@@ -54,6 +54,10 @@ class AlertDetail(AlertSummary):
     resolved_at: datetime | None
     unique_sources: int
     allowed_transitions: list[AlertStatus]
+    wireshark_filter: str = Field(description="Display filter for the alert's traffic")
+    evidence_capture_id: int | None = Field(
+        description="Uploaded capture holding the alert's packets (GET /alerts/{id}/evidence.pcap)"
+    )
     notes: list[NoteOut]
     history: list[HistoryEntry]
 

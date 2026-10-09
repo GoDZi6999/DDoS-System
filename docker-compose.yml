@@ -114,6 +114,7 @@ services:
       API_RATE_PER_MINUTE: ${API_RATE_PER_MINUTE:-600}
       API_MAX_FLOWS: ${API_MAX_FLOWS:-1000}
       API_MAX_EXPLAINED: ${API_MAX_EXPLAINED:-20}
+      CAPTURE_MAX_MB: ${CAPTURE_MAX_MB:-100}
       # Trust X-Forwarded-For only from the dashboard server (its fixed
       # address below), so per-IP login throttling and audit entries see the
       # browser's address instead of the frontend container's.
@@ -135,6 +136,8 @@ services:
       timeout: 3s
       retries: 6
       start_period: 10s
+    volumes:
+      - captures:/data/captures
     networks: [frontnet, corenet]
 
   # Consumes detections from Redis, stores them and raises alerts.
@@ -193,6 +196,33 @@ services:
       start_period: 30s
     networks: [corenet]
     restart: unless-stopped
+
+  # Analyses uploaded packet captures (Captures page) through the engine.
+  capture-worker:
+    <<: *backend
+    command: ["python", "-m", "app.workers.capture_analyzer"]
+    environment:
+      DATABASE_URL: *app-database-url
+      REDIS_URL: *redis-url
+      MODEL_BUNDLE: ${MODEL_BUNDLE:-models/sentinel-flow/2026.10.03}
+    volumes:
+      - captures:/data/captures
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+      redis:
+        condition: service_healthy
+    healthcheck:
+      test:
+        - CMD
+        - python
+        - -c
+        - "import os, sys, time; sys.exit(time.time() - os.path.getmtime('/tmp/capture-worker.heartbeat') > 30)"
+      interval: 10s
+      timeout: 3s
+      retries: 3
+      start_period: 15s
+    networks: [corenet]
 
   # Sends queued alert notifications (with retries) and applies data retention.
   notifier:
@@ -278,6 +308,7 @@ services:
       API_INTERNAL_URL: http://backend:8000
       # Set to true when the dashboard is served over HTTPS.
       COOKIE_SECURE: ${COOKIE_SECURE:-false}
+      CAPTURE_MAX_MB: ${CAPTURE_MAX_MB:-100}
     depends_on:
       backend:
         condition: service_healthy
@@ -308,6 +339,7 @@ networks:
 
 volumes:
   pgdata:
+  captures:
   redisdata:
   prometheusdata:
   grafanadata:

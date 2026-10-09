@@ -18,6 +18,7 @@ MATRIX = [
     ("GET", "/api/v1/alerts", VIEWER, None),
     ("GET", "/api/v1/alerts/{alert_id}", VIEWER, None),
     ("GET", "/api/v1/alerts/{alert_id}/events", VIEWER, None),
+    ("GET", "/api/v1/alerts/{alert_id}/evidence.pcap", ANALYST, None),
     ("POST", "/api/v1/alerts/{alert_id}/ack", ANALYST, None),
     ("PATCH", "/api/v1/alerts/{alert_id}/status", ANALYST, {"status": "CONTAINED"}),
     ("POST", "/api/v1/alerts/{alert_id}/notes", ANALYST, {"body": "note"}),
@@ -49,6 +50,10 @@ MATRIX = [
     ("GET", "/api/v1/api-keys", ADMIN, None),
     ("POST", "/api/v1/api-keys", ADMIN, {"name": "matrix-key", "scopes": ["detect"]}),
     ("POST", "/api/v1/api-keys/{key_id}/revoke", ADMIN, None),
+    ("GET", "/api/v1/captures", VIEWER, None),
+    ("POST", "/api/v1/captures", ANALYST, None),
+    ("GET", "/api/v1/captures/{capture_id}", VIEWER, None),
+    ("DELETE", "/api/v1/captures/{capture_id}", ADMIN, None),
 ]
 
 # Reachable without a role: health probes and the token endpoints themselves.
@@ -82,7 +87,7 @@ def test_matrix_covers_every_endpoint():
 
 @pytest.mark.parametrize(("method", "template", "minimum", "body"), MATRIX)
 def test_role_matrix(client, method, template, minimum, body):
-    path = template.format(alert_id=1, event_id=1, user_id=1, channel_id=1, key_id=1)
+    path = template.format(alert_id=1, event_id=1, user_id=1, channel_id=1, key_id=1, capture_id=1)
     users = {role: create_user(client, f"{role.value}-matrix", role) for role in Role}
 
     anonymous = client.request(method, path, json=body)
