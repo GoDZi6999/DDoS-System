@@ -66,3 +66,10 @@ class DeliveryStatus(StrEnum):
     SENT = "sent"
     FAILED = "failed"
     SUPPRESSED = "suppressed"
+
+
+class ApiScope(StrEnum):
+    """What a /v2 API key may do."""
+
+    DETECT = "detect"  # POST /v2/detect: classify flows and get the verdict back
+    INGEST = "ingest"  # POST /v2/flows: hand flows to the real-time engine (alerts)

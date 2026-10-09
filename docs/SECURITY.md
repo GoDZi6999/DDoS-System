@@ -51,7 +51,11 @@ still open. The threat model (STRIDE) is in
   rejected.
 - Security headers on every response (`X-Content-Type-Options`,
   `X-Frame-Options: DENY`, `Referrer-Policy: no-referrer`), plus
-  `Cache-Control: no-store` and a restrictive CSP on `/api/*`.
+  `Cache-Control: no-store` and a restrictive CSP on `/api/*` and `/v2/*`.
+- Customer API keys (`/v2`): random 256-bit secrets shown once; only their
+  SHA-256 is stored, and lookups go by hash. Each key carries scopes
+  (`detect`, `ingest`), is rate-limited per minute and capped in flows per
+  request; admins create and revoke keys, and both are audited.
 - Readiness probe reports only `ok`/`error`; failure details stay in logs.
 - No CORS headers are sent: browsers cannot call the API cross-origin. The
   dashboard reaches it through a same-origin backend-for-frontend.
@@ -155,6 +159,9 @@ still open. The threat model (STRIDE) is in
 | DNS rebinding | The SSRF guard resolves the host before sending, and the HTTP client resolves it again; a hostile DNS server could answer differently the second time | Admin-only configuration limits who can set targets; pinning the connection to the checked address would close it |
 | SMTP relay is trusted | `SMTP_*` settings come from the operator's environment and are not subject to the private-address check (relays usually are internal) | Use STARTTLS/TLS (`SMTP_SECURITY`) with a real relay |
 | `/metrics` has no authentication | Anyone who can reach the API port directly can read operational counts (open alerts, flow rates) | Port bound to localhost; keep it off public interfaces or set `METRICS_ENABLED=false` |
+| API rate limit fails open | If Redis is down, `/v2` keys are not rate-limited (batch size is still capped) | Accepted for availability, as with login throttling |
+| `/v2/flows` trusts the customer's flows | A key holder can send fabricated flows and raise alerts under its own `api-<prefix>` sensor | Keys are per customer and revocable; the sensor name shows which key sent the flows |
+| `/v2/detect` runs the model in the API process | Heavy use slows other API requests | Batch, rate and explanation caps; run more backend replicas or a separate detect service for real load |
 | Model attacks (evasion, poisoning) | Adversarial traffic can be crafted to look benign | Documented limitation; model bundles are activated by admins only (Phase 4) |
 
 ## Deploying beyond localhost

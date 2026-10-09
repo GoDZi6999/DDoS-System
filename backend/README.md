@@ -9,9 +9,13 @@ The same image runs four ways in `docker-compose.yml`:
 | Service | Command | Role |
 |---|---|---|
 | `migrate` | `alembic upgrade head && python -m app.cli bootstrap` | One-shot, as the schema owner: migrations + first admin |
-| `backend` | `uvicorn app.main:app` | API, as the least-privilege `sentinel_app` role |
+| `backend` | `uvicorn app.main:app` | API (`/api/v1` for the dashboard, `/v2` for customer applications), as the least-privilege `sentinel_app` role |
 | `alert-engine` | `python -m app.workers.alert_engine` | Consumes `sentinel:detections` from Redis, stores events, raises alerts, queues notifications |
 | `notifier` | `python -m app.workers.notifier` | Sends queued notifications (email, Slack, webhook) with retries; applies data retention every 6 h |
+
+The image builds from the repository root (`docker build -f backend/Dockerfile .`)
+because `/v2/detect` needs the shared ML package (`ml/sentinel_ml`) and the model
+bundles.
 
 ## Run locally (without Docker)
 
@@ -22,7 +26,8 @@ Requires Python 3.11+, PostgreSQL 14+ and Redis 7. Defaults in
 ```bash
 cd backend
 python -m venv .venv && source .venv/bin/activate
-pip install -r requirements-dev.txt
+pip install -r requirements-dev.txt     # includes ../ml/requirements.txt
+export PYTHONPATH=../ml                  # sentinel_ml, for /v2/detect
 alembic upgrade head
 INITIAL_ADMIN_PASSWORD='choose-a-long-passphrase' python -m app.cli bootstrap
 uvicorn app.main:app --reload            # http://localhost:8000/docs
@@ -67,8 +72,10 @@ app/
   schemas/             Pydantic request/response models; detection.py is the stream contract
   services/            business logic: auth, users, alerts (workflow + correlation),
                        events, stats, audit, detection config, notifications
-                       (outbox), senders (SMTP/Slack/webhook), retention
-  api/                 health probes, dependencies (auth, roles), /api/v1 routers, WebSocket
+                       (outbox), senders (SMTP/Slack/webhook), retention,
+                       API keys, detector (model for /v2/detect), flow ingest
+  api/                 health probes, dependencies (auth, roles), /api/v1 routers, WebSocket,
+                       /v2 customer API (API-key auth: detect, flow ingest)
   workers/             alert_engine.py (Redis stream consumer), notifier.py (outbox sender)
 alembic/               migrations
 tests/                 pytest suite (real PostgreSQL + Redis)

@@ -59,8 +59,20 @@ class Settings(BaseSettings):
     evidence_retention_days: int = Field(90, ge=1)
     delivery_retention_days: int = Field(30, ge=1)
 
+    # Machine API (/v2), authenticated by API keys. Requests per key per minute,
+    # and the largest batch one request may carry.
+    api_rate_per_minute: int = Field(600, ge=1)
+    api_max_flows: int = Field(1000, ge=1, le=10_000)
+    # /v2/detect explains (SHAP) at most this many attack flows per request:
+    # SHAP costs ~10x a prediction, and a flood batch is near-identical flows.
+    api_max_explained: int = Field(20, ge=0, le=1000)
+    # Model bundle for /v2/detect. Unset: the default bundle in the repository
+    # (the Docker image sets it). Needs the ML stack (ml/requirements.txt).
+    model_bundle: str | None = None
+
     @field_validator(
         "jwt_secret",
+        "model_bundle",
         "initial_admin_password",
         "smtp_host",
         "smtp_username",

@@ -17,5 +17,6 @@ known-third-party = ["alembic"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
-pythonpath = ["."]
+# sentinel_ml (shared features + inference, for /v2/detect) lives in ../ml.
+pythonpath = [".", "../ml"]
 addopts = "-ra"

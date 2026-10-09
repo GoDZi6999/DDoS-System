@@ -46,6 +46,9 @@ MATRIX = [
     ("PATCH", "/api/v1/notifications/channels/{channel_id}", ADMIN, {}),
     ("POST", "/api/v1/notifications/channels/{channel_id}/test", ADMIN, None),
     ("GET", "/api/v1/notifications/deliveries", ADMIN, None),
+    ("GET", "/api/v1/api-keys", ADMIN, None),
+    ("POST", "/api/v1/api-keys", ADMIN, {"name": "matrix-key", "scopes": ["detect"]}),
+    ("POST", "/api/v1/api-keys/{key_id}/revoke", ADMIN, None),
 ]
 
 # Reachable without a role: health probes and the token endpoints themselves.
@@ -59,6 +62,12 @@ PUBLIC_OR_SELF = {
     ("POST", "/api/v1/auth/password"),
 }
 
+# The machine API authenticates with API keys, not user roles (tests/test_api_v2.py).
+API_KEY_ENDPOINTS = {
+    ("POST", "/v2/detect"),
+    ("POST", "/v2/flows"),
+}
+
 
 def test_matrix_covers_every_endpoint():
     documented = {
@@ -68,12 +77,12 @@ def test_matrix_covers_every_endpoint():
     }
     tested = {(method, path) for method, path, _, _ in MATRIX}
 
-    assert documented - PUBLIC_OR_SELF == tested
+    assert documented - PUBLIC_OR_SELF - API_KEY_ENDPOINTS == tested
 
 
 @pytest.mark.parametrize(("method", "template", "minimum", "body"), MATRIX)
 def test_role_matrix(client, method, template, minimum, body):
-    path = template.format(alert_id=1, event_id=1, user_id=1, channel_id=1)
+    path = template.format(alert_id=1, event_id=1, user_id=1, channel_id=1, key_id=1)
     users = {role: create_user(client, f"{role.value}-matrix", role) for role in Role}
 
     anonymous = client.request(method, path, json=body)
