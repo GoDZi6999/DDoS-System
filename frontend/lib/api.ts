@@ -44,7 +44,7 @@ export async function fetcher<T>(path: string): Promise<T> {
 
 /** State-changing call; the custom header is the proxy's CSRF check. */
 export async function send<T>(
-  method: "POST" | "PUT" | "PATCH",
+  method: "POST" | "PUT" | "PATCH" | "DELETE",
   path: string,
   body?: unknown,
 ): Promise<T> {
@@ -54,4 +54,27 @@ export async function send<T>(
     body: body === undefined ? undefined : JSON.stringify(body),
   });
   return parse<T>(response);
+}
+
+/** Upload a packet capture file as the raw request body. */
+export async function uploadCapture<T>(file: File, raiseAlerts: boolean): Promise<T> {
+  const query = new URLSearchParams({ filename: file.name, raise_alerts: String(raiseAlerts) });
+  const response = await fetch(`/api/backend/captures?${query}`, {
+    method: "POST",
+    headers: { "Content-Type": "application/octet-stream", "x-sentinel-csrf": "1" },
+    body: file,
+  });
+  return parse<T>(response);
+}
+
+/** Download a file from the API and hand it to the browser as `filename`. */
+export async function download(path: string, filename: string): Promise<void> {
+  const response = await fetch(`/api/backend/${path}`, { cache: "no-store" });
+  if (!response.ok) await parse(response); // throws ApiError with the API's reason
+  const url = URL.createObjectURL(await response.blob());
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = filename;
+  link.click();
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
 }

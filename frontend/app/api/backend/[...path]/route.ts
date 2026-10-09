@@ -10,10 +10,11 @@ import { backendFetch, clearSession } from "@/lib/session";
 const ALLOWED = [
   /^auth\/me$/,
   /^auth\/password$/,
-  /^alerts(\/\d+(\/(ack|status|notes|assignee|events))?)?$/,
+  /^alerts(\/\d+(\/(ack|status|notes|assignee|events|evidence\.pcap))?)?$/,
   /^events(\/\d+)?$/,
   /^stats\/(summary|timeseries|distribution)$/,
   /^sensors$/,
+  /^captures(\/\d+)?$/,
   /^config\/detection$/,
   /^audit$/,
   /^users(\/\d+)?$/,
@@ -21,6 +22,11 @@ const ALLOWED = [
 ];
 
 const MAX_BODY = 64 * 1024;
+// Packet capture uploads (POST captures) are raw files; the API enforces its
+// own CAPTURE_MAX_MB as well.
+const MAX_CAPTURE = Number(process.env.CAPTURE_MAX_MB || 100) * 1024 * 1024;
+// Response headers worth passing on (file downloads).
+const PASS_HEADERS = ["content-disposition", "x-evidence-packets", "x-evidence-truncated"];
 const CSRF_HEADER = "x-sentinel-csrf";
 
 function problem(status: number, detail: string) {
@@ -48,10 +54,20 @@ async function forward(request: NextRequest, ctx: RouteContext<"/api/backend/[..
     if (request.headers.get(CSRF_HEADER) !== "1" || !sameOrigin(request)) {
       return problem(403, "Cross-site request refused");
     }
-    const body = await request.text();
-    if (body.length > MAX_BODY) return problem(413, "Request body too large");
-    init.body = body;
-    init.headers = { "Content-Type": "application/json" };
+    if (target === "captures" && request.method === "POST") {
+      const declared = Number(request.headers.get("content-length") ?? NaN);
+      if (declared > MAX_CAPTURE) return problem(413, "The capture file is too large");
+      // Buffered (not streamed) so the request can be resent after a token refresh.
+      const body = await request.arrayBuffer();
+      if (body.byteLength > MAX_CAPTURE) return problem(413, "The capture file is too large");
+      init.body = body;
+      init.headers = { "Content-Type": "application/octet-stream" };
+    } else if (request.method !== "DELETE") {
+      const body = await request.text();
+      if (body.length > MAX_BODY) return problem(413, "Request body too large");
+      init.body = body;
+      init.headers = { "Content-Type": "application/json" };
+    }
   }
 
   let response: Response;
@@ -67,8 +83,12 @@ async function forward(request: NextRequest, ctx: RouteContext<"/api/backend/[..
   const headers = new Headers({ "Cache-Control": "no-store" });
   const type = response.headers.get("content-type");
   if (type) headers.set("Content-Type", type);
+  for (const name of PASS_HEADERS) {
+    const value = response.headers.get(name);
+    if (value) headers.set(name, value);
+  }
   const body = response.status === 204 ? null : await response.arrayBuffer();
   return new Response(body, { status: response.status, headers });
 }
 
-export { forward as GET, forward as POST, forward as PUT, forward as PATCH };
+export { forward as GET, forward as POST, forward as PUT, forward as PATCH, forward as DELETE };

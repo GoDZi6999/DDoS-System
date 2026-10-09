@@ -5,6 +5,7 @@ from app.api.v1 import (
     api_keys,
     audit,
     auth,
+    captures,
     config,
     events,
     notifications,
@@ -26,6 +27,7 @@ for module in (
     audit,
     notifications,
     api_keys,
+    captures,
     ws,
 ):
     router.include_router(module.router)

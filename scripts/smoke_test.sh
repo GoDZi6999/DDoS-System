@@ -134,4 +134,40 @@ entries="$(curl -fsS "${auth[@]}" "$BACKEND_URL/api/v1/audit?action=auth.login" 
   | json_field '["total"]')"
 [[ "$entries" -ge 1 ]] || fail "login was not audited"
 
-echo "OK: stack healthy, auth + RBAC, ML detection pipeline and audit trail verified"
+echo "-> packet capture: upload -> capture worker -> report, alert and Wireshark evidence"
+workdir="$(mktemp -d)"
+trap 'rm -rf "$workdir"' EXIT
+docker compose exec -T capture-worker python -m app.cli demo-capture - >"$workdir/demo.pcap" \
+  || fail "could not build the demo capture"
+capture_id="$(curl -fsS "${auth[@]}" -H "Content-Type: application/octet-stream" \
+  --data-binary @"$workdir/demo.pcap" \
+  "$BACKEND_URL/api/v1/captures?filename=smoke-demo.pcap&raise_alerts=true" \
+  | json_field '["id"]')" || fail "capture upload failed"
+for _ in $(seq 1 60); do
+  capture="$(curl -fsS "${auth[@]}" "$BACKEND_URL/api/v1/captures/$capture_id")"
+  capture_status="$(json_field '["status"]' <<<"$capture")"
+  [[ "$capture_status" == "done" || "$capture_status" == "failed" ]] && break
+  sleep 1
+done
+[[ "$capture_status" == "done" ]] || fail "capture analysis: $capture_status $(json_field '["error"]' <<<"$capture")"
+attacks="$(json_field '["report"]["attack_types"]' <<<"$capture")"
+echo "   attack detections: $attacks"
+grep -q "ddos" <<<"$attacks" || fail "the demo capture's HTTP flood was not detected"
+evidence_alert=""
+for _ in $(seq 1 30); do
+  for id in $(curl -fsS "${auth[@]}" "$BACKEND_URL/api/v1/alerts?attack_type=ddos&limit=50" \
+    | python3 -c "import json, sys; print(' '.join(str(a['id']) for a in json.load(sys.stdin)['items']))"); do
+    linked="$(curl -fsS "${auth[@]}" "$BACKEND_URL/api/v1/alerts/$id" | json_field '["evidence_capture_id"]')"
+    [[ "$linked" == "$capture_id" ]] && evidence_alert="$id" && break
+  done
+  [[ -n "$evidence_alert" ]] && break
+  sleep 1
+done
+[[ -n "$evidence_alert" ]] || fail "no alert linked to the uploaded capture"
+curl -fsS "${auth[@]}" -o "$workdir/evidence.pcap" \
+  "$BACKEND_URL/api/v1/alerts/$evidence_alert/evidence.pcap" || fail "evidence download failed"
+magic="$(od -An -tx1 -N4 "$workdir/evidence.pcap" | tr -d ' ')"
+[[ "$magic" == "d4c3b2a1" || "$magic" == "a1b2c3d4" ]] || fail "evidence is not a pcap file ($magic)"
+echo "   alert $evidence_alert: $(wc -c <"$workdir/evidence.pcap") bytes of packets for Wireshark"
+
+echo "OK: stack healthy, auth + RBAC, ML detection pipeline, capture analysis and audit trail verified"

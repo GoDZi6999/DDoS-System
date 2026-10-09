@@ -56,6 +56,12 @@ still open. The threat model (STRIDE) is in
   SHA-256 is stored, and lookups go by hash. Each key carries scopes
   (`detect`, `ingest`), is rate-limited per minute and capped in flows per
   request; admins create and revoke keys, and both are audited.
+- Packet capture uploads: analysts and admins only, size-capped while
+  streaming (`CAPTURE_MAX_MB`), accepted only with pcap/pcapng magic bytes,
+  stored under a random name (the client's file name is only a sanitised
+  label) and parsed by a separate worker, not the API process. Uploads,
+  deletions and every evidence download are audited; evidence (raw packets)
+  is analyst-only, viewers see reports and filters.
 - Readiness probe reports only `ok`/`error`; failure details stay in logs.
 - No CORS headers are sent: browsers cannot call the API cross-origin. The
   dashboard reaches it through a same-origin backend-for-frontend.
@@ -162,6 +168,8 @@ still open. The threat model (STRIDE) is in
 | API rate limit fails open | If Redis is down, `/v2` keys are not rate-limited (batch size is still capped) | Accepted for availability, as with login throttling |
 | `/v2/flows` trusts the customer's flows | A key holder can send fabricated flows and raise alerts under its own `api-<prefix>` sensor | Keys are per customer and revocable; the sensor name shows which key sent the flows |
 | `/v2/detect` runs the model in the API process | Heavy use slows other API requests | Batch, rate and explanation caps; run more backend replicas or a separate detect service for real load |
+| Uploaded captures hold full packets | Payloads (possibly credentials or personal data) sit in the `captures` volume until an admin deletes them; there is no automatic retention for them yet | Upload only traffic you may analyse; delete captures after use; analyst-only evidence downloads are audited |
+| Capture parsing runs Scapy on untrusted files | A crafted capture could exploit a parser bug in the capture worker | The worker is a separate container on the internal network only, without the API's port; failures are contained to one capture |
 | Model attacks (evasion, poisoning) | Adversarial traffic can be crafted to look benign | Documented limitation; model bundles are activated by admins only (Phase 4) |
 
 ## Deploying beyond localhost

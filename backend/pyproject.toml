@@ -17,6 +17,7 @@ known-third-party = ["alembic"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
-# sentinel_ml (shared features + inference, for /v2/detect) lives in ../ml.
-pythonpath = [".", "../ml"]
+# sentinel_ml (features + inference, for /v2/detect) lives in ../ml; sentinel_engine
+# (flow builder, pipeline, for capture analysis) in ../engine.
+pythonpath = [".", "../ml", "../engine"]
 addopts = "-ra"

@@ -49,6 +49,8 @@ export type AlertDetail = AlertSummary & {
   resolved_at: string | null;
   unique_sources: number;
   allowed_transitions: AlertStatus[];
+  wireshark_filter: string;
+  evidence_capture_id: number | null;
   notes: { id: number; author: UserRef; body: string; created_at: string }[];
   history: {
     ts: string;
@@ -188,4 +190,37 @@ export type Sensor = {
 export type SensorList = {
   items: Sensor[];
   backlog: { pending: number; lag: number | null } | null;
+};
+
+export type CaptureStatus = "queued" | "analyzing" | "done" | "failed";
+
+export type CaptureReport = {
+  packets: number;
+  flows: number;
+  attacks: number;
+  attack_types: Record<string, number>;
+  top_sources: { ip: string; detections: number }[];
+  top_targets: { target: string; detections: number }[];
+  max_risk: number;
+  first_packet_at: string;
+  last_packet_at: string;
+  duration_s: number;
+  analysis_s: number;
+  model_version: string;
+};
+
+export type Capture = {
+  id: number;
+  filename: string;
+  file_format: "pcap" | "pcapng";
+  size_bytes: number;
+  sha256: string;
+  raise_alerts: boolean;
+  status: CaptureStatus;
+  error: string | null;
+  uploaded_by_id: number | null;
+  created_at: string;
+  started_at: string | null;
+  finished_at: string | null;
+  report: CaptureReport | null;
 };

@@ -97,8 +97,9 @@ appears in the alert's `history`.
 | Endpoint | Notes |
 |---|---|
 | `GET /alerts` | Filters: `status` (repeatable), `severity` (repeatable), `attack_type`, `ip` (source or destination), `since`, `until`; `sort=last_seen` (default) or `risk`. |
-| `GET /alerts/{id}` | Adds `recommended_action`, `explanation` (SHAP factors), `risk_components`, `unique_sources`, `allowed_transitions`, `notes`, `history`. |
+| `GET /alerts/{id}` | Adds `recommended_action`, `explanation` (SHAP factors), `risk_components`, `unique_sources`, `allowed_transitions`, `notes`, `history`, `wireshark_filter` (a display filter for the alert's traffic) and `evidence_capture_id` (the uploaded capture holding its packets, or `null`). |
 | `GET /alerts/{id}/events` | The detections aggregated into the alert. |
+| `GET /alerts/{id}/evidence.pcap` | Analyst. The alert's packets as a pcap file for Wireshark, cut from the uploaded capture with its original timestamps (at most 50,000 packets; `X-Evidence-Packets`, `X-Evidence-Truncated`). `422` for alerts not raised from an uploaded capture. Audited as `alert.evidence_downloaded`. |
 | `POST /alerts/{id}/ack` | NEW → INVESTIGATING; `409` if already acknowledged. |
 | `PATCH /alerts/{id}/status` | `{"status": "CONTAINED", "note": "optional"}`; `409` for an invalid transition. |
 | `POST /alerts/{id}/notes` | `{"body": "…"}` (1–5000 characters). |
@@ -137,7 +138,8 @@ Audited actions: `auth.login`, `auth.login_failed`, `auth.locked`,
 `alert.acknowledged`, `alert.status_changed`, `alert.note_added`,
 `alert.assigned`, `config.updated`, `notification.channel_created`,
 `notification.channel_updated`, `notification.test_sent`, `retention.purged`,
-`api_key.created`, `api_key.revoked`.
+`api_key.created`, `api_key.revoked`, `capture.uploaded`, `capture.deleted`,
+`alert.evidence_downloaded`.
 
 ## Notifications
 
@@ -187,6 +189,48 @@ Webhook and Slack URLs must be `https` and resolve to public addresses
 attempts are retried after 30 s, 2 min, 10 min and 30 min (5 attempts);
 `4xx` answers (except 408/425/429), refused recipients and refused targets
 fail at once. The reason is stored in `last_error`.
+
+## Packet captures
+
+Upload a capture saved by Wireshark or tcpdump (`.pcap` or `.pcapng`, up to
+`CAPTURE_MAX_MB`, default 100) and the capture worker replays it through the
+real-time engine at full speed: the same flow builder, model, rules and risk
+scoring as live traffic. Timestamps are shifted so the capture ends at
+analysis time, which keeps its flows and alerts inside the dashboard's time
+windows; reports and evidence files keep the original times.
+
+| Endpoint | Notes |
+|---|---|
+| `POST /captures?filename=x.pcapng&raise_alerts=true` | Analyst. The file is the raw request body (`Content-Type: application/octet-stream`). Checked by its magic bytes (`422` otherwise); `413` above the size limit. `202` with the capture, `status: queued`. With `raise_alerts` (default), attacks found raise alerts and notifications like live traffic, and those alerts can serve their packets as evidence. Audited as `capture.uploaded`. |
+| `GET /captures` | Viewer. Newest first, paginated. |
+| `GET /captures/{id}` | Viewer. `status`: `queued`, `analyzing`, `done` or `failed` (with `error`). |
+| `DELETE /captures/{id}` | Admin. Deletes the file; alerts and flows it produced stay, without packet evidence. `409` while it is being analysed. Audited as `capture.deleted`. |
+
+```bash
+curl -X POST "localhost:8000/api/v1/captures?filename=monday.pcapng" \
+  -H "Authorization: Bearer $TOKEN" -H "Content-Type: application/octet-stream" \
+  --data-binary @monday.pcapng
+```
+
+A finished capture's `report`:
+
+```json
+{
+  "packets": 4292, "flows": 742, "attacks": 602,
+  "attack_types": {"ddos": 600, "portscan": 2},
+  "top_sources": [{"ip": "198.51.100.7", "detections": 215}],
+  "top_targets": [{"target": "192.168.10.80:80", "detections": 600}],
+  "max_risk": 97,
+  "first_packet_at": "2026-09-21T14:13:20.931653+00:00",
+  "last_packet_at": "2026-09-21T14:13:58.709000+00:00",
+  "duration_s": 37.778, "analysis_s": 4.1, "model_version": "sentinel-flow-2026.10.03"
+}
+```
+
+`attacks` counts attack detections (flows the model flagged, plus rule hits
+such as port scans), not alerts. Non-IP packets are skipped.
+`python -m app.cli demo-capture demo.pcap` writes a synthetic capture (web
+traffic, a port scan and an HTTP flood) to try it with.
 
 ## Live updates (WebSocket)
 
@@ -310,7 +354,8 @@ output against it.
   ],
   "risk_score": 85,
   "risk_components": {"ml_confidence": 97, "traffic_anomaly": 90},
-  "model_version": "xgb-2026.10.1"
+  "model_version": "xgb-2026.10.1",
+  "capture_id": null
 }
 ```
 
@@ -321,7 +366,8 @@ weights.
 Rules (`backend/app/schemas/detection.py`): unknown fields are rejected;
 `protocol` ∈ `tcp|udp|icmp|other`; `source` ∈ `live|pcap|sim`; `label` matches
 `[a-z0-9_]{1,32}` (`benign` never raises alerts); `confidence` 0–1;
-`risk_score` 0–100; `weight` is the feature's share of total |SHAP| in
+`risk_score` 0–100; `capture_id` (optional) names the uploaded capture a
+flow came from; `weight` is the feature's share of total |SHAP| in
 percent; Infinity/NaN are rejected. Severity is derived from `risk_score` by
 the alert engine.
 
@@ -339,5 +385,7 @@ by a crashed consumer are reclaimed after 60 seconds.
 | `docker compose exec backend python -m app.cli reset-password <user>` | Account recovery: prints a new generated password, ends the user's sessions, audits the reset. |
 | `docker compose exec alert-engine python -m app.cli demo-detections --count 20` | Publishes synthetic, clearly labelled (`source: sim`, `model_version: synthetic-demo`) detections from documentation IP ranges, to exercise the pipeline before the ML engine exists. |
 | `docker compose exec backend alembic current` | Shows the applied migration. |
+| `docker compose exec -T backend python -m app.cli demo-capture - > demo.pcap` | Writes a synthetic capture to try the Captures page with (not real traffic). |
+| `docker compose logs capture-worker` | Capture analysis progress and failures. |
 | `docker compose exec backend python -m app.cli purge` | Applies the retention policy now (the notifier also runs it every 6 hours). |
 | `docker compose logs notifier` | Delivery outcomes (ids, channel names and status; no secrets or URLs). |

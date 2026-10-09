@@ -13,7 +13,7 @@ import {
   StatusBadge,
   inputClass,
 } from "@/components/ui";
-import { send } from "@/lib/api";
+import { ApiError, download, send } from "@/lib/api";
 import {
   RISK_COMPONENTS,
   attackName,
@@ -178,6 +178,7 @@ export function AlertDetailView({ id }: { id: number }) {
           <Card title="Details">
             <Facts alert={alert} />
           </Card>
+          <Wireshark alert={alert} canDownload={canAct} />
           <Card title="Risk score" description="Signals combined by the risk engine (0–100 each)">
             <p className="tabular mb-3 font-mono text-4xl font-semibold text-ink glow-text">
               {alert.risk_score}
@@ -191,6 +192,75 @@ export function AlertDetailView({ id }: { id: number }) {
         </div>
       </div>
     </>
+  );
+}
+
+function Wireshark({ alert, canDownload }: { alert: AlertDetail; canDownload: boolean }) {
+  const [copied, setCopied] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  async function copy() {
+    try {
+      await navigator.clipboard.writeText(alert.wireshark_filter);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    } catch {
+      setError("Copy failed; select the filter and copy it by hand.");
+    }
+  }
+
+  async function packets() {
+    setBusy(true);
+    setError(null);
+    try {
+      await download(`alerts/${alert.id}/evidence.pcap`, `argusai-alert-${alert.id}.pcap`);
+    } catch (e) {
+      setError(e instanceof ApiError ? e.message : "Download failed");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <Card title="Wireshark" description="Display filter for this alert's traffic">
+      <div className="flex items-start gap-2">
+        <code className="min-w-0 flex-1 break-words rounded-sm bg-sunken px-2 py-1.5 font-mono text-xs text-ink [font-variant-ligatures:none]">
+          {alert.wireshark_filter}
+        </code>
+        <Button onClick={copy} aria-label="Copy Wireshark filter">
+          {copied ? "Copied" : "Copy"}
+        </Button>
+      </div>
+      {alert.evidence_capture_id ? (
+        <div className="mt-3 space-y-2">
+          {canDownload ? (
+            <Button variant="primary" disabled={busy} onClick={packets}>
+              {busy ? "Preparing…" : "Download packets (.pcap)"}
+            </Button>
+          ) : (
+            <p className="text-xs text-muted">Analysts can download this alert&apos;s packets.</p>
+          )}
+          <p className="text-xs text-muted">
+            From{" "}
+            <Link href={`/captures?id=${alert.evidence_capture_id}`} className="text-accent hover:underline">
+              uploaded capture #{alert.evidence_capture_id}
+            </Link>
+            , with its original timestamps.
+          </p>
+        </div>
+      ) : (
+        <p className="mt-3 text-xs text-muted">
+          Packets are kept for alerts raised from uploaded captures. For live traffic, apply the filter
+          to a capture taken on the same network.
+        </p>
+      )}
+      {error && (
+        <div className="mt-3">
+          <Notice tone="error">{error}</Notice>
+        </div>
+      )}
+    </Card>
   );
 }
 

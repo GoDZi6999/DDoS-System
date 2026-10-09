@@ -32,6 +32,10 @@ class NetworkEvent(Base):
     bytes_per_sec: Mapped[float]
     features: Mapped[dict[str, Any]] = mapped_column(JSONB)
     source: Mapped[EventSource] = mapped_column(str_enum(EventSource, "event_source"))
+    # Set for flows from an uploaded capture file (the packets behind its alerts).
+    capture_id: Mapped[int | None] = mapped_column(
+        ForeignKey("captures.id", ondelete="SET NULL"), index=True
+    )
 
 
 class Prediction(Base):

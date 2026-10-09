@@ -4,6 +4,7 @@ python -m app.cli bootstrap              create the first admin user (idempotent
 python -m app.cli reset-password USER    set a new generated password (account recovery)
 python -m app.cli demo-detections        publish synthetic detections (pipeline testing)
 python -m app.cli purge                  apply data retention now (also run by the notifier)
+python -m app.cli demo-capture FILE      write a synthetic .pcap to try the Captures page
 """
 
 import argparse
@@ -178,6 +179,23 @@ async def purge() -> int:
     return 0
 
 
+def demo_capture(output: str) -> int:
+    import tempfile
+    from pathlib import Path
+
+    from app.services.demo_capture import build
+
+    if output != "-":
+        count = build(Path(output))
+        print(f"Wrote {count} packets to {output}", file=sys.stderr)
+        return 0
+    with tempfile.TemporaryDirectory() as folder:
+        path = Path(folder) / "demo.pcap"
+        build(path)
+        sys.stdout.buffer.write(path.read_bytes())
+    return 0
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(prog="python -m app.cli")
     commands = parser.add_subparsers(dest="command", required=True)
@@ -194,6 +212,10 @@ def main(argv: list[str] | None = None) -> int:
     )
     demo.add_argument("--label", default="ddos")
     commands.add_parser("purge", help="apply the data retention policy now")
+    capture = commands.add_parser(
+        "demo-capture", help="write a synthetic capture (web traffic, port scan, HTTP flood)"
+    )
+    capture.add_argument("output", help="file to write, e.g. demo.pcap ('-' for stdout)")
     args = parser.parse_args(argv)
 
     if args.command == "bootstrap":
@@ -202,6 +224,8 @@ def main(argv: list[str] | None = None) -> int:
         return asyncio.run(reset_password(args.username))
     if args.command == "purge":
         return asyncio.run(purge())
+    if args.command == "demo-capture":
+        return demo_capture(args.output)
     return asyncio.run(demo_detections(args.count, args.target, args.label))
 
 

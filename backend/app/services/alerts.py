@@ -23,6 +23,7 @@ from app.schemas.config import DetectionConfig
 from app.schemas.detection import BENIGN_LABEL, Detection
 from app.schemas.user import UserRef
 from app.services.audit import SYSTEM_ACTOR, Actor, record_audit
+from app.services.captures import evidence_capture_id, wireshark_filter
 from app.services.errors import ConflictError, NotFoundError, UnprocessableError
 from app.services.notifications import enqueue_for_alert
 from app.services.playbook import describe, recommended_action
@@ -166,6 +167,8 @@ async def get_alert_detail(session: AsyncSession, alert_id: int) -> AlertDetail:
         resolved_at=alert.resolved_at,
         unique_sources=unique_sources or 0,
         allowed_transitions=[s for s in AlertStatus if s in TRANSITIONS[alert.status]],
+        wireshark_filter=wireshark_filter(alert),
+        evidence_capture_id=await evidence_capture_id(session, alert.id),
         notes=[
             NoteOut(id=n.id, author=_ref(users, n.author_id), body=n.body, created_at=n.created_at)
             for n in notes
@@ -371,6 +374,7 @@ def _event_row(stream_id: str | None, d: Detection) -> dict:
         "bytes_per_sec": d.bytes_per_sec,
         "features": d.features,
         "source": d.source,
+        "capture_id": d.capture_id,
     }
 
 

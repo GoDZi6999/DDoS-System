@@ -59,6 +59,7 @@ Design principles:
 | `engine` (risk) | Combine signals into 0–100 score; baseline frozen during attacks | Pure Python, weights from the settings API via Redis |
 | `alert_service` | Dedupe/aggregate detections into alerts; state machine; notifications | FastAPI service module + Redis |
 | `api` | REST, WebSocket, JWT, RBAC, audit | FastAPI, SQLAlchemy 2, Alembic |
+| `capture-worker` | Analyse uploaded `.pcap`/`.pcapng` files: replay through the engine pipeline at full speed, report, tag detections with the capture id; cut alert packets out as evidence | asyncio worker (backend image) + `sentinel_engine` + Scapy |
 | `notifier` | Alert notifications (email, Slack, webhook) from a transactional outbox; data retention | asyncio worker + PostgreSQL (`SKIP LOCKED`) |
 | `frontend` | SOC dashboard | Next.js, Tailwind, Recharts |
 | `engine` (simulator) | Benign + attack traffic for demos, in-process (sends nothing); attack statistics from held-out CIC-IDS2017 flows | Python |

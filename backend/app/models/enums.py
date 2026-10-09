@@ -49,6 +49,13 @@ class EventSource(StrEnum):
     SIM = "sim"
 
 
+class CaptureStatus(StrEnum):
+    QUEUED = "queued"
+    ANALYZING = "analyzing"
+    DONE = "done"
+    FAILED = "failed"
+
+
 class ChannelKind(StrEnum):
     EMAIL = "email"
     SLACK = "slack"

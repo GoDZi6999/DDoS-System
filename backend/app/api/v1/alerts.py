@@ -1,9 +1,11 @@
 from typing import Annotated, Literal
 
-from fastapi import APIRouter, Query, Request, status
+from fastapi import APIRouter, Query, Request, Response, status
+from fastapi.concurrency import run_in_threadpool
 from pydantic import AwareDatetime, IPvAnyAddress
 
 from app.api.deps import AnalystUser, PaginationDep, SessionDep, ViewerUser, actor_for
+from app.core.config import get_settings
 from app.models.enums import AlertStatus, Severity
 from app.schemas.alert import (
     AlertDetail,
@@ -16,7 +18,11 @@ from app.schemas.alert import (
 from app.schemas.common import Page
 from app.schemas.event import EventSummary
 from app.services import alerts as alert_service
+from app.services import captures as capture_service
 from app.services import events as event_service
+from app.services.audit import record_audit
+from app.services.capture_analysis import CaptureError, carve
+from app.services.errors import UnprocessableError
 from app.services.notify import publish
 
 router = APIRouter(prefix="/alerts", tags=["alerts"])
@@ -69,6 +75,46 @@ async def list_alert_events(
     filters = event_service.EventFilters(alert_id=alert_id)
     items, total = await event_service.list_events(session, filters, page.limit, page.offset)
     return Page(items=items, total=total, limit=page.limit, offset=page.offset)
+
+
+@router.get(
+    "/{alert_id}/evidence.pcap",
+    response_class=Response,
+    responses={200: {"content": {"application/vnd.tcpdump.pcap": {}}}},
+)
+async def download_evidence(
+    alert_id: int, analyst: AnalystUser, request: Request, session: SessionDep
+) -> Response:
+    """The alert's packets as a pcap file for Wireshark, with the capture's
+    original timestamps. Available for alerts raised from uploaded captures
+    (`evidence_capture_id` in the alert detail); 422 otherwise."""
+    evidence = await capture_service.evidence_request(session, get_settings(), alert_id)
+    try:
+        data, packets, truncated = await run_in_threadpool(
+            carve, evidence.path, evidence.flows, capture_service.EVIDENCE_MAX_PACKETS
+        )
+    except CaptureError as exc:
+        raise UnprocessableError(str(exc)) from exc
+    if not packets:
+        raise UnprocessableError("None of the alert's packets were found in the capture")
+    record_audit(
+        session,
+        actor_for(analyst, request),
+        "alert.evidence_downloaded",
+        entity_type="alert",
+        entity_id=alert_id,
+        after={"capture_id": evidence.capture.id, "packets": packets, "truncated": truncated},
+    )
+    await session.commit()
+    return Response(
+        data,
+        media_type="application/vnd.tcpdump.pcap",
+        headers={
+            "Content-Disposition": f'attachment; filename="argusai-alert-{alert_id}.pcap"',
+            "X-Evidence-Packets": str(packets),
+            "X-Evidence-Truncated": "true" if truncated else "false",
+        },
+    )
 
 
 @router.post("/{alert_id}/ack", response_model=AlertDetail)
