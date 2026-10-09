@@ -2,8 +2,8 @@
 
     python -m app.cli demo-capture demo.pcap
 
-Normal web browsing, then a SYN port scan and an HTTP flood against a web
-server. Attackers use documentation addresses (TEST-NET ranges), victims
+Normal web browsing, then a SYN port scan, an HTTP flood and a SYN flood
+against a web server. Attackers use documentation addresses (TEST-NET ranges), victims
 private ones. Generated with Scapy; it is not real traffic, so it shows the
 pipeline working rather than measuring detection quality.
 
@@ -11,7 +11,9 @@ The flood imitates the LOIC HTTP flood in CIC-IDS2017 (the model's training
 data) as captured there: connections already open when the capture starts,
 tiny client windows, a short request and ~11 KB of response. The current
 model recognises it in that shape but not when each connection's handshake
-is captured too; see docs/ML_METHODOLOGY.md.
+is captured too; see docs/ML_METHODOLOGY.md. The SYN flood is the opposite
+case: the model calls it benign and the engine's flood rule (rule:flood-v1)
+catches it.
 """
 
 import random
@@ -21,6 +23,7 @@ WEB_SERVER = "192.168.10.80"
 SCANNER = "203.0.113.66"
 CLIENTS = [f"192.168.10.{i}" for i in range(20, 26)]
 FLOOD_SOURCES = ["198.51.100.7", "198.51.100.23", "198.51.100.42"]
+SYN_FLOOD_PACKETS = 1600
 
 
 def build(path: Path, start: float = 1_790_000_000.0, seed: int = 7) -> int:
@@ -93,6 +96,14 @@ def build(path: Path, start: float = 1_790_000_000.0, seed: int = 7) -> int:
                 window=229,
             )
         add(t + 2.7, src, WEB_SERVER, port, 80, "A", bytes(6), window=256)
+
+    # 40-48 s: SYN flood on port 443 from spoofed addresses (198.18.0.0/15, the
+    # benchmarking range); the server answers each SYN and never hears back.
+    for i in range(SYN_FLOOD_PACKETS):
+        src, port = f"198.18.{i // 250}.{i % 250 + 1}", rng.randrange(1024, 65535)
+        t = start + 40 + i * 0.005
+        add(t, src, WEB_SERVER, port, 443, "S", window=1024)
+        add(t + 0.001, WEB_SERVER, src, 443, port, "SA")
 
     packets.sort(key=lambda p: float(p.time))
     with PcapWriter(str(path), linktype=1, sync=False) as writer:

@@ -3,6 +3,7 @@
     packets -> FlowTable -> finished flows ─┐
     ready flow records (simulator) ─────────┴-> WindowStats -> classifier -> RiskEngine
                                                  └-> port-scan rule ─────────┤
+                    FloodTracker (10 s) -> flood rule (benign verdicts) ───────┤
                     BeaconTracker (5 min) -> beaconing rule ──────────────────┘
                                                          -> detections (Redis stream)
                                                          -> traffic.tick (pub/sub)
@@ -26,15 +27,24 @@ from sentinel_ml.inference import Predictor
 from sentinel_engine.flows import FlowTable
 from sentinel_engine.packets import Heartbeat, Packet
 from sentinel_engine.risk import RiskEngine
-from sentinel_engine.window import PORTSCAN_MIN_PORTS, BeaconTracker, WindowStats
+from sentinel_engine.window import (
+    PORTSCAN_MIN_PORTS,
+    BeaconTracker,
+    Flood,
+    FloodTracker,
+    WindowStats,
+    flood_target,
+)
 
 logger = logging.getLogger(__name__)
 
 RULE_PORTSCAN = "rule:portscan-v1"
 RULE_BEACON = "rule:beacon-v1"
+RULE_FLOOD = "rule:flood-v1"
 RULE_CONFIDENCE = 0.9
 # A steady rhythm is suggestive, not conclusive (health checks beacon too).
 BEACON_CONFIDENCE = 0.8
+FLOOD_CONFIDENCE = 0.85
 BEACON_REPORT_S = 60.0  # one beaconing detection per pair per minute
 PROTOCOLS = {"tcp", "udp", "icmp"}
 # SHAP explanations per (attack label, destination) per second; see _explain_budget.
@@ -72,6 +82,7 @@ class Engine:
         self.table = FlowTable()
         self.window = WindowStats()
         self.beacons = BeaconTracker()
+        self.floods = FloodTracker()
         self.risk = RiskEngine()
         meta = predictor.bundle.metadata
         self.model_version = f"{meta['name']}-{meta['version']}"
@@ -209,13 +220,40 @@ class Engine:
             )
         return detections
 
+    @staticmethod
+    def _flood_verdict(flood: Flood) -> "_RuleVerdict":
+        """Relabels one flow of a flood; explained by the flood's size."""
+        rate = "flood_half_open_flows_per_s" if flood.kind == "syn" else "flood_flows_per_s"
+        evidence = {
+            rate: round(flood.flows_per_s, 2),
+            "flood_sources": float(flood.sources),
+            "flood_window_flows": float(flood.flows),
+        }
+        return _RuleVerdict(
+            label=flood.label,
+            confidence=FLOOD_CONFIDENCE,
+            class_probs={flood.label: FLOOD_CONFIDENCE},
+            explanation=[
+                {
+                    "feature": feature,
+                    "value": float(value),
+                    "contribution": 1.0 if i == 0 else 0.0,
+                    "weight": 100.0 if i == 0 else 0.0,
+                }
+                for i, (feature, value) in enumerate(evidence.items())
+            ],
+        )
+
     def handle_flows(self, records: list[dict], now: float) -> list[dict]:
         self._refresh_config(now)
         for record in records:
             self.window.add(record)
             self.beacons.add(record)
+            self.floods.add(record)
         self.window.evict(now)
         self.beacons.evict(now)
+        self.floods.evict(now)
+        floods = self.floods.floods()
         detections = []
         if records:
             frame = features.from_records([r["features"] for r in records])
@@ -226,6 +264,23 @@ class Engine:
             for record, prediction in zip(records, predictions, strict=True):
                 src, dst = record["src_ip"], record["dst_ip"]
                 rate = self.window.dst_packet_rate(dst)
+                # The flood rule only relabels flows the model let through.
+                flood = None
+                if not prediction.is_attack:
+                    flood = next(
+                        (f for f in floods.get(flood_target(record), ()) if f.includes(record)),
+                        None,
+                    )
+                if flood is not None:
+                    prediction = self._flood_verdict(flood)
+                    risk, components = self.risk.score(
+                        flood.label, FLOOD_CONFIDENCE, src, dst, rate, now
+                    )
+                    self.risk.record_attack(src, dst, now)
+                    detection = self._detection(record, prediction, risk, components)
+                    detection["model_version"] = RULE_FLOOD
+                    detections.append(detection)
+                    continue
                 if prediction.is_attack:
                     risk, components = self.risk.score(
                         prediction.label, prediction.confidence, src, dst, rate, now

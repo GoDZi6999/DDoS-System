@@ -199,6 +199,8 @@ export type CaptureReport = {
   flows: number;
   attacks: number;
   attack_types: Record<string, number>;
+  /** "model", or the cross-flow rule that raised the detection (e.g. "rule:flood-v1"). */
+  detected_by?: Record<string, number>;
   top_sources: { ip: string; detections: number }[];
   top_targets: { target: string; detections: number }[];
   max_risk: number;

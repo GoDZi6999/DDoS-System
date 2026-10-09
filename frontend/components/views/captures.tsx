@@ -13,6 +13,13 @@ import { hasRole, useMe } from "@/lib/user";
 const LIMIT = 20;
 const MAX_MB = 100;
 
+const DETECTORS: Record<string, string> = {
+  model: "ML model",
+  "rule:flood-v1": "Flood rule",
+  "rule:portscan-v1": "Port-scan rule",
+  "rule:beacon-v1": "Beaconing rule",
+};
+
 const STATUS: Record<CaptureStatus, { label: string; dot: string }> = {
   queued: { label: "Queued", dot: "bg-[var(--status-neutral)]" },
   analyzing: { label: "Analyzing", dot: "bg-warning animate-pulse" },
@@ -185,10 +192,17 @@ function Report({ capture, canDelete, onDeleted }: { capture: Capture; canDelete
             />
             <StatTile label="Highest risk" value={report.max_risk} detail="0–100" />
           </div>
-          <div className="grid gap-5 sm:grid-cols-3">
+          <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-4">
             <Ranked
               title="Attack types"
               rows={Object.entries(report.attack_types).map(([label, count]) => ({ name: attackName(label), count }))}
+            />
+            <Ranked
+              title="Detected by"
+              rows={Object.entries(report.detected_by ?? {}).map(([detector, count]) => ({
+                name: DETECTORS[detector] ?? detector,
+                count,
+              }))}
             />
             <Ranked title="Top attack sources" rows={report.top_sources.map((s) => ({ name: s.ip, count: s.detections }))} />
             <Ranked title="Top targets" rows={report.top_targets.map((t) => ({ name: t.target, count: t.detections }))} />

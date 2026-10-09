@@ -2,7 +2,7 @@ import numpy as np
 import pytest
 
 from sentinel_engine.risk import DEFAULT_WEIGHTS, RiskEngine
-from sentinel_engine.window import BeaconTracker, WindowStats
+from sentinel_engine.window import BeaconTracker, FloodTracker, WindowStats, is_half_open
 
 
 def flow(end, src, dst, dport, packets=2):
@@ -107,3 +107,56 @@ def test_an_ongoing_attack_does_not_become_the_new_normal():
         risk.observe_benign("10.0.0.5", 20_000.0, float(t))
 
     assert risk.anomaly("10.0.0.5", 20_000.0) == 100
+
+
+def tcp_flow(end, src, dst, dport, syn=1, ack=3, fwd_bytes=120.0, protocol="tcp"):
+    record = flow(end, src, dst, dport)
+    record["protocol"] = protocol
+    record["features"] = {"syn_flag_count": syn, "ack_flag_count": ack, "fwd_bytes": fwd_bytes}
+    return record
+
+
+def test_half_open_flows_are_syns_without_a_completed_handshake():
+    assert is_half_open(tcp_flow(1, "a", "b", 80, syn=1, ack=1, fwd_bytes=0))  # SYN, SYN-ACK
+    assert is_half_open(tcp_flow(1, "a", "b", 80, syn=1, ack=0, fwd_bytes=0))  # SYN only
+    assert not is_half_open(tcp_flow(1, "a", "b", 80))  # a full connection
+    assert not is_half_open(tcp_flow(1, "a", "b", 80, syn=0, ack=2, fwd_bytes=0))  # mid-stream
+    assert not is_half_open(tcp_flow(1, "a", "b", 53, ack=0, fwd_bytes=0, protocol="udp"))
+
+
+def test_syn_flood_from_spoofed_sources_is_a_distributed_flood():
+    tracker = FloodTracker()
+    for i in range(250):  # 25 half-open flows/s over 10 s, each from a new address
+        tracker.add(
+            tcp_flow(i * 0.04, f"10.9.{i // 200}.{i % 200}", "10.0.0.5", 80, ack=1, fwd_bytes=0)
+        )
+
+    (flood,) = tracker.floods()[("10.0.0.5", 80, "tcp")]
+    assert (flood.kind, flood.label, flood.sources, flood.flows) == ("syn", "ddos", 250, 250)
+    assert flood.includes(tcp_flow(10, "1.2.3.4", "10.0.0.5", 80, ack=1, fwd_bytes=0))
+    assert not flood.includes(tcp_flow(10, "1.2.3.4", "10.0.0.5", 80))  # a real client
+
+    tracker.evict(21.0)
+    assert tracker.floods() == {}
+
+
+def test_connection_flood_counts_heavy_sources_not_a_busy_servers_clients():
+    tracker = FloodTracker()
+    for i in range(2000):  # 200 connections/s, but from 1000 clients (2 each)
+        tracker.add(tcp_flow(i * 0.005, f"10.1.{i % 1000 // 250}.{i % 250}", "10.0.0.5", 443))
+    assert tracker.floods() == {}
+
+    for i in range(600):  # one source, 60 connections/s
+        tracker.add(tcp_flow(i * 0.0166, "203.0.113.66", "10.0.0.5", 443))
+    (flood,) = tracker.floods()[("10.0.0.5", 443, "tcp")]
+    assert (flood.kind, flood.label, flood.top_source) == ("connection", "dos", "203.0.113.66")
+    assert flood.includes(tcp_flow(10, "203.0.113.66", "10.0.0.5", 443))
+    assert not flood.includes(tcp_flow(10, "10.1.0.1", "10.0.0.5", 443))
+
+
+def test_udp_floods_are_grouped_by_host_across_ports():
+    tracker = FloodTracker()
+    for i in range(600):
+        tracker.add(tcp_flow(i * 0.01, "203.0.113.9", "10.0.0.5", 1000 + i, protocol="udp"))
+
+    assert list(tracker.floods()) == [("10.0.0.5", 0, "udp")]

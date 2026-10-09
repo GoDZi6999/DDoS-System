@@ -9,7 +9,7 @@ from scapy.utils import wrpcap
 from sentinel_ml.inference import Predictor
 
 from sentinel_engine.packets import Packet
-from sentinel_engine.pipeline import RULE_BEACON, RULE_PORTSCAN, Engine
+from sentinel_engine.pipeline import RULE_BEACON, RULE_FLOOD, RULE_PORTSCAN, Engine
 from sentinel_engine.publisher import MemoryPublisher
 from sentinel_engine.simulator import ATTACKS, SCAN_TARGET, Simulator
 from sentinel_engine.sources import pcap_source
@@ -101,6 +101,7 @@ def test_benign_background_does_not_look_like_beaconing(predictor):
 
     assert publisher.published
     assert not [d for d in publisher.published if d["model_version"] == RULE_BEACON]
+    assert not [d for d in publisher.published if d["model_version"] == RULE_FLOOD]
 
 
 def test_traffic_ticks_are_published(predictor):
@@ -197,3 +198,85 @@ def test_candidate_bundle_detects_a_flood():
     published = simulate(candidate, "ddos").published
     flood = [d for d in published if d["src_ip"].startswith("198.51.100.")]
     assert sum(d["label"] == "ddos" for d in flood) / len(flood) > 0.95
+
+
+SERVER = "192.168.10.80"
+
+
+def handshake(ts, client, sport, dport=80, request=300):
+    """A complete TCP connection: handshake, request, response, FIN exchange."""
+    steps = [
+        (0.0, True, "S", 0),
+        (0.001, False, "SA", 0),
+        (0.002, True, "A", 0),
+        (0.003, True, "PA", request),
+        (0.004, False, "PA", 1400),
+        (0.005, True, "FA", 0),
+        (0.006, False, "FA", 0),
+        (0.007, True, "A", 0),
+    ]
+    return [
+        Packet(ts + dt, client, SERVER, sport, dport, "tcp", size, flags, 64240)
+        if forward
+        else Packet(ts + dt, SERVER, client, dport, sport, "tcp", size, flags, 64240)
+        for dt, forward, flags, size in steps
+    ]
+
+
+def run_packets(predictor, packets):
+    publisher = MemoryPublisher()
+    Engine(predictor, publisher, "pcap").run(sorted(packets, key=lambda p: p.ts))
+    return publisher.published
+
+
+def clients(start=T0):
+    return [
+        p
+        for i in range(40)
+        for p in handshake(start + i * 0.5, f"192.168.10.{20 + i % 6}", 40000 + i, 443)
+    ]
+
+
+def test_flood_with_full_handshakes_is_caught_by_the_flood_rule(predictor):
+    """The model misses floods whose handshakes are captured (it learned
+    CIC-IDS2017's mid-stream floods); the flood rule does not."""
+    attackers = ["198.51.100.7", "198.51.100.23", "198.51.100.42"]
+    flood = [
+        p
+        for i in range(1200)  # 100 connections/s for 12 s
+        for p in handshake(T0 + 2 + i * 0.01, attackers[i % 3], 1024 + i)
+    ]
+    published = run_packets(predictor, clients() + flood)
+
+    from_attackers = [d for d in published if d["src_ip"] in attackers]
+    by_model = [d for d in from_attackers if d["model_version"] != RULE_FLOOD]
+    by_rule = [d for d in from_attackers if d["model_version"] == RULE_FLOOD]
+    assert all(d["label"] == "benign" for d in by_model)  # what the model alone sees
+    assert len(by_rule) / len(from_attackers) > 0.5  # everything after the ramp-up
+    assert {(d["label"], d["dst_ip"], d["dst_port"]) for d in by_rule} == {("ddos", SERVER, 80)}
+    first = by_rule[0]
+    assert first["explanation"][0]["feature"] == "flood_flows_per_s"
+    assert first["explanation"][0]["value"] >= 50
+    assert first["risk_score"] > 0
+    jsonschema.validate(first, SCHEMA)
+    legit = [d for d in published if d["src_ip"].startswith("192.168.10.")]
+    assert legit and all(d["label"] == "benign" for d in legit)
+
+
+def test_syn_flood_is_caught_by_the_flood_rule(predictor):
+    flood = []
+    for i in range(3000):  # 200 SYNs/s for 15 s from spoofed addresses
+        src, sport, ts = f"10.{i // 250}.{i % 250}.9", 1024 + i, T0 + 2 + i * 0.005
+        flood += [
+            Packet(ts, src, SERVER, sport, 80, "tcp", 0, "S", 64240),
+            Packet(ts + 0.001, SERVER, src, 80, sport, "tcp", 0, "SA", 65160),
+        ]
+    published = run_packets(predictor, clients() + flood)
+
+    syns = [d for d in published if d["dst_ip"] == SERVER and d["dst_port"] == 80]
+    rule = [d for d in syns if d["model_version"] == RULE_FLOOD]
+    assert len(rule) / len(syns) > 0.9
+    assert {d["label"] for d in rule} == {"ddos"}
+    assert rule[0]["explanation"][0]["feature"] == "flood_half_open_flows_per_s"
+    legit = [d for d in published if d["src_ip"].startswith("192.168.10.")]
+    assert legit and all(d["label"] == "benign" for d in legit)

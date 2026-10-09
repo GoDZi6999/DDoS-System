@@ -216,21 +216,24 @@ A finished capture's `report`:
 
 ```json
 {
-  "packets": 4292, "flows": 742, "attacks": 602,
-  "attack_types": {"ddos": 600, "portscan": 2},
+  "packets": 7492, "flows": 2342, "attacks": 2202,
+  "attack_types": {"ddos": 2200, "portscan": 2},
+  "detected_by": {"rule:flood-v1": 1600, "model": 600, "rule:portscan-v1": 2},
   "top_sources": [{"ip": "198.51.100.7", "detections": 215}],
-  "top_targets": [{"target": "192.168.10.80:80", "detections": 600}],
+  "top_targets": [{"target": "192.168.10.80:443", "detections": 1600}],
   "max_risk": 97,
   "first_packet_at": "2026-09-21T14:13:20.931653+00:00",
-  "last_packet_at": "2026-09-21T14:13:58.709000+00:00",
-  "duration_s": 37.778, "analysis_s": 4.1, "model_version": "sentinel-flow-2026.10.03"
+  "last_packet_at": "2026-09-21T14:14:07.996000+00:00",
+  "duration_s": 47.064, "analysis_s": 4.0, "model_version": "sentinel-flow-2026.10.03"
 }
 ```
 
 `attacks` counts attack detections (flows the model flagged, plus rule hits
-such as port scans), not alerts. Non-IP packets are skipped.
+such as port scans), not alerts; `detected_by` splits them between the model
+and the engine's cross-flow rules. Non-IP packets are skipped.
 `python -m app.cli demo-capture demo.pcap` writes a synthetic capture (web
-traffic, a port scan and an HTTP flood) to try it with.
+traffic, a port scan, an HTTP flood the model catches and a SYN flood only the
+flood rule catches) to try it with.
 
 ## Live updates (WebSocket)
 

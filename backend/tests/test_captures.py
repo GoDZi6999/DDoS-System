@@ -361,5 +361,8 @@ def test_the_demo_capture_shows_a_flood_and_a_scan(model, tmp_path):
     report = analyze(path, 1, Predictor.from_bundle(DEFAULT_BUNDLE)).report
 
     assert report["packets"] == packets
-    assert report["attack_types"]["ddos"] >= 500
+    assert report["attack_types"]["ddos"] >= 500 + 1500
     assert report["attack_types"]["portscan"] >= 1
+    # The HTTP flood is the model's; the SYN flood looks benign to it.
+    assert report["detected_by"]["model"] >= 500
+    assert report["detected_by"]["rule:flood-v1"] >= 1500
