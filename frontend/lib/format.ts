@@ -113,24 +113,6 @@ export function timeAgo(iso: string, now = Date.now()): string {
   return `${Math.floor(seconds / 86400)} d ago`;
 }
 
-/** Wireshark display filter for an alert's traffic (both directions); mirrors
- * sentinel_engine.analysis.wireshark_filter. */
-export function wiresharkFilter(
-  src: string,
-  dst: string,
-  protocol: string,
-  dstPort: number | null,
-): string {
-  const addr = (ip: string) => `${ip.includes(":") ? "ipv6" : "ip"}.addr == ${ip}`;
-  const parts = [...new Set([src, dst])].map(addr);
-  if (protocol === "tcp" || protocol === "udp") {
-    parts.push(dstPort ? `${protocol}.port == ${dstPort}` : protocol);
-  } else if (protocol === "icmp") {
-    parts.push("(icmp || icmpv6)");
-  }
-  return parts.join(" && ");
-}
-
 export function target(ip: string, port: number | null): string {
   if (port === null) return ip;
   return ip.includes(":") ? `[${ip}]:${port}` : `${ip}:${port}`;

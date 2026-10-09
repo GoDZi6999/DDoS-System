@@ -6,14 +6,10 @@
     python -m sentinel_engine run --source sensor                    (flows from sensors)
     python -m sentinel_engine inject --scenario ddos --duration 20   (attack burst only)
     python -m sentinel_engine bench                                   (in-process benchmark)
-    python -m sentinel_engine analyze --pcap capture.pcapng          (offline report)
-    python -m sentinel_engine serve --port 8100                      (analysis API)
-    python -m sentinel_engine api-key --name <tenant>                (key for the API)
 
 Capture sensors on other hosts: python -m sentinel_engine.sensor --help
 
-Environment: REDIS_URL, MODEL_BUNDLE, FLOW_PROFILES; ARGUS_API_KEYS and
-ARGUS_API_RATE_PER_MINUTE for `serve`.
+Environment: REDIS_URL, MODEL_BUNDLE, FLOW_PROFILES.
 """
 
 import argparse
@@ -54,51 +50,7 @@ def main(argv: list[str] | None = None) -> int:
     bench.add_argument("--flows", type=int, default=3000)
     bench.add_argument("--json", action="store_true")
 
-    analyze = commands.add_parser(
-        "analyze", help="report on a capture (Wireshark .pcapng, tcpdump .pcap); no Redis"
-    )
-    analyze.add_argument("--pcap", type=Path, required=True)
-    analyze.add_argument("--json", action="store_true", help="full report as JSON")
-    analyze.add_argument("--all", action="store_true", help="include benign flows (with --json)")
-
-    serve = commands.add_parser("serve", help="run the analysis API (needs ARGUS_API_KEYS)")
-    serve.add_argument("--host", default="0.0.0.0")  # noqa: S104 (a container service)
-    serve.add_argument("--port", type=int, default=8100)
-
-    api_key = commands.add_parser("api-key", help="create an API key for `serve`")
-    api_key.add_argument("--name", required=True, help="tenant name echoed in responses")
-
     args = parser.parse_args(argv)
-    if args.command == "api-key":
-        from sentinel_engine.api import new_key
-
-        key, digest = new_key()
-        print(f"API key (give to the client, shown once): {key}")
-        print(f"Add to ARGUS_API_KEYS:                    {args.name}:{digest}")
-        return 0
-    if args.command == "analyze":
-        from sentinel_ml.inference import Predictor
-
-        from sentinel_engine.analysis import analyze_capture, print_report
-
-        predictor = Predictor.from_bundle(os.environ.get("MODEL_BUNDLE", DEFAULT_BUNDLE))
-        report = analyze_capture(predictor, args.pcap)
-        print_report(report, as_json=args.json, include_benign=args.all)
-        return 0
-    if args.command == "serve":
-        import uvicorn
-        from sentinel_ml.inference import Predictor
-
-        from sentinel_engine.api import create_app, parse_keys
-
-        logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
-        app = create_app(
-            Predictor.from_bundle(os.environ.get("MODEL_BUNDLE", DEFAULT_BUNDLE)),
-            parse_keys(os.environ.get("ARGUS_API_KEYS", "")),
-            rate_per_minute=int(os.environ.get("ARGUS_API_RATE_PER_MINUTE", "60")),
-        )
-        uvicorn.run(app, host=args.host, port=args.port)
-        return 0
     if args.command == "bench":
         from sentinel_engine.bench import main as bench_main
 
