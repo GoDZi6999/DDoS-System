@@ -2,7 +2,8 @@
 
     packets -> FlowTable -> finished flows ─┐
     ready flow records (simulator) ─────────┴-> WindowStats -> classifier -> RiskEngine
-                                                 └-> port-scan rule ─────────┘
+                                                 └-> port-scan rule ─────────┤
+                    BeaconTracker (5 min) -> beaconing rule ──────────────────┘
                                                          -> detections (Redis stream)
                                                          -> traffic.tick (pub/sub)
 
@@ -25,12 +26,16 @@ from sentinel_ml.inference import Predictor
 from sentinel_engine.flows import FlowTable
 from sentinel_engine.packets import Heartbeat, Packet
 from sentinel_engine.risk import RiskEngine
-from sentinel_engine.window import PORTSCAN_MIN_PORTS, WindowStats
+from sentinel_engine.window import PORTSCAN_MIN_PORTS, BeaconTracker, WindowStats
 
 logger = logging.getLogger(__name__)
 
 RULE_PORTSCAN = "rule:portscan-v1"
+RULE_BEACON = "rule:beacon-v1"
 RULE_CONFIDENCE = 0.9
+# A steady rhythm is suggestive, not conclusive (health checks beacon too).
+BEACON_CONFIDENCE = 0.8
+BEACON_REPORT_S = 60.0  # one beaconing detection per pair per minute
 PROTOCOLS = {"tcp", "udp", "icmp"}
 # SHAP explanations per (attack label, destination) per second; see _explain_budget.
 EXPLAIN_PER_TARGET_S = 5
@@ -66,10 +71,12 @@ class Engine:
         self._explained: dict[tuple[str, str], int] = {}
         self.table = FlowTable()
         self.window = WindowStats()
+        self.beacons = BeaconTracker()
         self.risk = RiskEngine()
         meta = predictor.bundle.metadata
         self.model_version = f"{meta['name']}-{meta['version']}"
         self._scan_reported: dict[tuple[str, str], float] = {}
+        self._beacon_reported: dict[tuple[str, str, int], float] = {}
         self._tick = {"flows": 0, "packets": 0, "attacks": 0, "max_risk": 0}
         self._next_config = 0.0
 
@@ -107,51 +114,108 @@ class Engine:
             "model_version": self.model_version,
         }
 
+    def _rule_detection(
+        self,
+        version: str,
+        label: str,
+        confidence: float,
+        src: str,
+        dst: str,
+        dport: int,
+        now: float,
+        packets: int,
+        evidence: dict[str, float],
+    ) -> dict:
+        """A detection raised by a cross-flow rule, explained by its evidence
+        (the first item is what triggered it)."""
+        record = {
+            "src_ip": src,
+            "dst_ip": dst,
+            "src_port": 0,
+            "dst_port": dport,
+            "protocol": "tcp",
+            "end": now,
+            "duration": self.window.window_s,
+            "packet_count": packets,
+            "byte_count": 0,
+            "features": evidence,
+        }
+        rule = _RuleVerdict(
+            label=label,
+            confidence=confidence,
+            class_probs={label: confidence},
+            explanation=[
+                {
+                    "feature": feature,
+                    "value": float(value),
+                    "contribution": 1.0 if i == 0 else 0.0,
+                    "weight": 100.0 if i == 0 else 0.0,
+                }
+                for i, (feature, value) in enumerate(evidence.items())
+            ],
+        )
+        risk, components = self.risk.score(
+            label, confidence, src, dst, self.window.dst_packet_rate(dst), now
+        )
+        self.risk.record_attack(src, dst, now)
+        detection = self._detection(record, rule, risk, components)
+        detection["model_version"] = version
+        return detection
+
     def _portscan_rule(self, now: float) -> list[dict]:
         detections = []
         for src, dst, ports in self.window.scanners(self.portscan_min_ports):
             if now - self._scan_reported.get((src, dst), -math.inf) < self.window.window_s:
                 continue
             self._scan_reported[(src, dst)] = now
-            record = {
-                "src_ip": src,
-                "dst_ip": dst,
-                "src_port": 0,
-                "dst_port": 0,
-                "protocol": "tcp",
-                "end": now,
-                "duration": self.window.window_s,
-                "packet_count": ports,
-                "byte_count": 0,
-                "features": {},
-            }
-            rule = _RuleVerdict(
-                label="portscan",
-                confidence=RULE_CONFIDENCE,
-                class_probs={"portscan": RULE_CONFIDENCE},
-                explanation=[
+            detections.append(
+                self._rule_detection(
+                    RULE_PORTSCAN,
+                    "portscan",
+                    RULE_CONFIDENCE,
+                    src,
+                    dst,
+                    0,
+                    now,
+                    ports,
+                    {"window_distinct_ports_src_to_dst": float(ports)},
+                )
+            )
+        return detections
+
+    def _beacon_rule(self, now: float) -> list[dict]:
+        detections = []
+        for beacon in self.beacons.beacons():
+            key = (beacon.src, beacon.dst, beacon.dport)
+            if now - self._beacon_reported.get(key, -math.inf) < BEACON_REPORT_S:
+                continue
+            self._beacon_reported[key] = now
+            detections.append(
+                self._rule_detection(
+                    RULE_BEACON,
+                    "botnet",
+                    BEACON_CONFIDENCE,
+                    beacon.src,
+                    beacon.dst,
+                    beacon.dport,
+                    now,
+                    beacon.flows,
                     {
-                        "feature": "window_distinct_ports_src_to_dst",
-                        "value": float(ports),
-                        "contribution": 1.0,
-                        "weight": 100.0,
-                    }
-                ],
+                        "beacon_interval_jitter": round(beacon.jitter, 4),
+                        "beacon_interval_s": round(beacon.interval_s, 3),
+                        "beacon_flows": float(beacon.flows),
+                    },
+                )
             )
-            risk, components = self.risk.score(
-                "portscan", RULE_CONFIDENCE, src, dst, self.window.dst_packet_rate(dst), now
-            )
-            self.risk.record_attack(src, dst, now)
-            detection = self._detection(record, rule, risk, components)
-            detection["model_version"] = RULE_PORTSCAN
-            detections.append(detection)
         return detections
 
     def handle_flows(self, records: list[dict], now: float) -> list[dict]:
         self._refresh_config(now)
         for record in records:
             self.window.add(record)
+            self.beacons.add(record)
         self.window.evict(now)
+        self.beacons.evict(now)
         detections = []
         if records:
             frame = features.from_records([r["features"] for r in records])
@@ -172,6 +236,7 @@ class Engine:
                     risk, components = 0, {}
                 detections.append(self._detection(record, prediction, risk, components))
         detections += self._portscan_rule(now)
+        detections += self._beacon_rule(now)
         self.publisher.detections(detections)
 
         attacks = [d for d in detections if d["label"] != "benign"]

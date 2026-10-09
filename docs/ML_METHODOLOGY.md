@@ -3,7 +3,8 @@
 How ArgusAI's flow classifier is built and evaluated, and what the results
 do and do not show. Code: [`ml/`](../ml/README.md). Full generated reports with
 plots: [`ml/reports/2026.10.03/report.md`](../ml/reports/2026.10.03/report.md) (default model)
-and [`ml/reports/2026.10.04/report.md`](../ml/reports/2026.10.04/report.md) (candidate, §8).
+[`ml/reports/2026.10.04/report.md`](../ml/reports/2026.10.04/report.md) (candidate, §8)
+and [`ml/reports/2026.10.08/report.md`](../ml/reports/2026.10.08/report.md) (candidate, §9).
 
 ## 1. Problem
 
@@ -110,6 +111,9 @@ Per class (XGBoost, test set):
   explicit rule on top of the classifier: one source reaching 20+ distinct
   ports on a host within 10 s raises a `portscan` detection
   (`model_version: rule:portscan-v1`), explained by the port count.
+  Since 2026.10.08 a second rule covers botnets the same way: one source
+  polling the same server and port at a steady rhythm raises a `botnet`
+  detection (`rule:beacon-v1`, see [`engine/README.md`](../engine/README.md#cross-flow-rules)).
 - **CV vs test gap** (0.985 vs 0.828 macro-F1): CV runs on class-capped data,
   the test set on the real mix, which punishes precision on rare classes. The
   test numbers are the realistic ones.
@@ -226,7 +230,99 @@ problem, and the final run), so its figures for 2026.10.04 are slightly
 optimistic. A cross-dataset evaluation (e.g. CIC-IDS2018 or CIC-DDoS2019,
 which use the same CICFlowMeter features) would be the clean next check.
 
-## 9. Reproducing
+## 9. Model iteration (2026.10.08)
+
+Goal: a model that passes the release gate, i.e. fewer false positives than
+2026.10.03 with no class losing more than 10 recall points.
+
+**Gate first.** The gate was committed as code (`sentinel_ml/gate.py`,
+commit `18830bb`) before any experiment, and the recipe and decision rule were
+committed (`ea57928`) before the test set was consulted. `train.py` now
+records the verdict against 2026.10.03 in every bundle's metadata and report.
+
+**Experiments, validation only.** The training split's temporal folds were
+used as fit (folds 0–2), tuning (fold 3) and judging (fold 4) sets, all at the
+real class mix, so a decision rule tuned on one fold is judged on a later fold
+it has not seen (the calibration hold-out the 2026.10.04 run lacked). XGBoost,
+fold 4, argmax:
+
+| Recipe | Macro-F1 | False positives | of which not "portscan" | Botnet recall |
+|---|---:|---:|---:|---:|
+| 2026.10.03 (every class capped at 150k, balanced weights) | 0.781 | 1.04% | 508 flows | 0.633 |
+| 2026.10.04 (all benign, √ weights) | 0.820 | 0.91% | 181 flows | 0.628 |
+| **All benign, balanced weights (chosen)** | 0.818 | 0.94% | 254 flows | 0.633 |
+
+- About 2,170 benign flows from the PortScan capture are flagged as scans by
+  *every* recipe; they dominate validation false positives (and are probably
+  part of the dataset's known labelling errors), which is why validation
+  rates are near 1% while test rates are near 0.1–0.2%.
+- Decision weights tuned on fold 3 and judged on fold 4 gained at most
+  +0.011 macro-F1, and for the chosen recipe pushed the botnet and web-attack
+  weights to their 0.2 floor. Allowing weights above 1 or a recall guard
+  changed nothing material.
+- Balanced weights give every class the same total weight however many
+  benign flows are kept, so the hypothesis was: same rare-class sensitivity
+  as 2026.10.03, fewer false alarms thanks to more varied benign data. Fold 4
+  supported it (identical botnet recall, half the non-scan false alarms).
+- LightGBM was tried but had not finished one fit after hours on this
+  machine's Docker VM, so LightGBM and HistGradientBoosting were dropped from
+  this round untested.
+
+**Decision rule (fixed before test):** XGBoost, every benign flow, balanced
+weights, argmax, refitted on the whole training split.
+
+**Result** (test set, one consultation):
+
+| | 2026.10.03 (default) | 2026.10.04 | 2026.10.08 |
+|---|---:|---:|---:|
+| Macro-F1 | 0.828 | **0.853** | 0.841 |
+| False positives | 0.20% | **0.11%** | 0.14% |
+| Attack detection | **99.27%** | 98.72% | 98.55% |
+| Port scan precision / recall | 0.24 / 0.88 | 0.33 / 0.87 | 0.30 / 0.87 |
+| Web attack precision / recall | 0.79 / 0.97 | 0.86 / 0.95 | **0.87 / 0.97** |
+| Botnet precision / recall | 0.42 / **0.92** | **0.52** / 0.75 | 0.47 / 0.68 |
+| Calibration error | – | 0.003 | 0.004 |
+| Release gate | – | failed (botnet −17) | **failed (botnet −25)** |
+
+Every check passes except botnet recall. 2026.10.03 stays the default and the
+2026.10.08 bundle is not committed.
+
+**What this shows.**
+
+- *Validation cannot see the botnet problem.* On fold 4 every recipe catches
+  123–124 of 196 botnet flows, yet on test the recipes range from 0.68 to
+  0.92 recall. The later botnet flows differ from the earlier ones, and only
+  the 2026.10.03 recipe, whose benign class was capped at 150,000 flows, still
+  catches most of them; both recipes trained on every benign flow lose them,
+  whichever class weights they use.
+  Without a validation signal for this, further tuning towards the gate would
+  amount to tuning on the test set, so this iteration stops here.
+- *Tuned decision weights are dangerous for rare classes.* The
+  validation-stage XGBoost, judged with its tuned weights (botnet at 0.2),
+  caught **no** botnet flow on test (macro-F1 0.770) while its argmax
+  counterpart is the shipped model above. Bundles keep deciding by argmax.
+- *The ablation got worse:* without the TCP window sizes, validation
+  macro-F1 is 0.651 (argmax) and test 0.581 with 5.1% false positives. The window sizes
+  matter even more to this recipe than to 2026.10.04 (0.920 → 0.651 vs
+  0.944 → 0.920 on validation).
+- Latency on this machine (Docker on Windows, sharing the CPU with the
+  running stack) was 7.3 ms per flow; it is not comparable with the 1.2 ms
+  measured on the 4-core VM.
+
+**Next steps that could pass the gate honestly:** a validation scheme that
+holds out a later slice of each botnet run (or a second dataset with botnet
+traffic, e.g. CSE-CIC-IDS2018) so botnet drift is visible before test, or a
+benign cap between 150,000 and all flows, chosen on such a validation set.
+The engine now has a cross-flow beaconing rule for botnets (`rule:beacon-v1`),
+like the port-scan rule; it is not part of the classifier's gate and has not
+been measured on labelled traffic, because the MachineLearningCVE files carry
+no addresses or timestamps.
+
+**Test-set accounting.** Consulted once in this iteration (the run above), so
+four times since 2026.10.03. Each extra look makes reported figures slightly
+more optimistic and the case for a fresh evaluation set stronger.
+
+## 10. Reproducing
 
 ```bash
 # CSVs in data/raw/cic-ids2017/MachineLearningCVE/ (data/README.md)

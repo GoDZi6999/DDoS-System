@@ -113,12 +113,18 @@ def without_features(pipeline: Pipeline, drop: tuple[str, ...]) -> Pipeline:
     return Pipeline([("features", AblationPreprocessor(drop)), *pipeline.steps[1:]])
 
 
-def fit(pipeline: Pipeline, X: pd.DataFrame, y: np.ndarray, weighting: str = "sqrt") -> Pipeline:
-    """Fit a candidate. Benign is kept in full, so XGBoost sees realistic base
-    rates; "sqrt" sample weights (square root of balanced) keep rare attack
-    classes from being swamped without pretending they are as common as
-    benign. "balanced" and "none" are the two extremes. The linear and forest
-    baselines balance internally (class_weight)."""
+def fit(
+    pipeline: Pipeline, X: pd.DataFrame, y: np.ndarray, weighting: str = "balanced"
+) -> Pipeline:
+    """Fit a candidate. Benign is kept in full and XGBoost gets "balanced"
+    sample weights: every class carries the same total weight, as in the
+    2026.10.03 recipe, so rare classes keep their sensitivity, while the extra
+    benign flows teach the model what normal traffic looks like (the
+    2026.10.03 recipe capped benign at 150,000 flows). On test this cut false
+    positives but lost botnet recall (2026.10.08, docs/ML_METHODOLOGY.md
+    section 9), as did "sqrt" (square root of balanced, 2026.10.04); "none"
+    ignores imbalance. The linear and forest baselines balance
+    internally (class_weight)."""
     params = {}
     if weighting != "none" and isinstance(pipeline[-1], XGBClassifier):
         weights = compute_sample_weight("balanced", y)

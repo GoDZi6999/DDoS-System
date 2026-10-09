@@ -1,7 +1,8 @@
+import numpy as np
 import pytest
 
 from sentinel_engine.risk import DEFAULT_WEIGHTS, RiskEngine
-from sentinel_engine.window import WindowStats
+from sentinel_engine.window import BeaconTracker, WindowStats
 
 
 def flow(end, src, dst, dport, packets=2):
@@ -26,6 +27,30 @@ def test_window_tracks_ports_sources_and_rates_and_forgets_old_flows():
     assert window.dst_packet_rate("10.0.0.5") == pytest.approx(4.0)
     window.evict(20.0)
     assert window.distinct_sources("10.0.0.5") == 0
+
+
+def test_beacons_are_regular_repeated_contacts_not_bursts_or_human_traffic():
+    rng = np.random.default_rng(0)
+    tracker = BeaconTracker()
+    polls = 1000 + np.cumsum(30 * (1 + rng.normal(0, 0.03, 12)))
+    for t in polls:  # a bot polling its C2 every 30 s with 3% jitter
+        tracker.add(flow(t, "10.0.0.66", "203.0.113.9", 443))
+    for t in np.cumsum(rng.exponential(20, 12)):  # a person browsing: irregular gaps
+        tracker.add(flow(1000 + t, "10.0.0.20", "10.20.0.10", 80))
+    for i in range(50):  # requests 0.2 s apart: regular, but too fast for a beacon
+        tracker.add(flow(1000 + i * 0.2, "10.0.0.21", "10.20.0.11", 8080))
+    for i in range(5):  # regular, but too few flows to call it
+        tracker.add(flow(1000 + i * 30, "10.0.0.22", "10.20.0.12", 22))
+
+    found = tracker.beacons()
+
+    assert [(b.src, b.dst, b.dport) for b in found] == [("10.0.0.66", "203.0.113.9", 443)]
+    assert found[0].flows == 12
+    assert found[0].interval_s == pytest.approx(30, rel=0.05)
+    assert found[0].jitter < 0.1
+
+    tracker.evict(polls[-1] + 300 - 60)  # only the last couple of polls are recent
+    assert tracker.beacons() == []
 
 
 def test_risk_components_and_weighted_score():

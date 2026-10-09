@@ -12,11 +12,16 @@ model worse on test (macro-F1 0.817 vs 0.853 with argmax), because refitting
 on the latest part of each run shifts its probabilities. Without a held-out
 set for the refitted model they cannot be tuned reliably, so bundles decide
 by argmax unless asked otherwise.
+
+When the reference bundle (gate.REFERENCE_VERSION) is present, the shipped
+model is checked against the release gate and the verdict is recorded in the
+metadata and the report.
 Run via `python -m sentinel_ml train`.
 """
 
 import json
 import logging
+import os
 import platform
 import subprocess
 import time
@@ -27,7 +32,7 @@ from pathlib import Path
 import numpy as np
 import pandas as pd
 
-from sentinel_ml import data, evaluate, models
+from sentinel_ml import data, evaluate, gate, models
 from sentinel_ml.bundle import save_bundle
 from sentinel_ml.decision import decide, macro_f1, tune_weights
 from sentinel_ml.explain import Explainer
@@ -73,6 +78,8 @@ def _stratified_sample(X: pd.DataFrame, y: np.ndarray, rows: int, seed: int) -> 
 
 
 def _git_commit() -> str | None:
+    if os.environ.get("GIT_COMMIT"):  # e.g. training in a container without the .git directory
+        return os.environ["GIT_COMMIT"]
     try:
         result = subprocess.run(
             ["git", "rev-parse", "HEAD"],  # noqa: S607
@@ -155,6 +162,15 @@ def run(
         final_argmax["macro_f1"],
     )
 
+    reference = gate.reference_metrics(models_dir)
+    gate_result = None if reference is None else gate.check(final, reference)
+    if gate_result is not None:
+        logger.info(
+            "Release gate vs %s: %s",
+            gate_result["reference"],
+            "PASSED" if gate_result["passed"] else "FAILED",
+        )
+
     ablation_result = None
     if ablation:
         logger.info("Ablation: %s without %s", selected, ", ".join(ABLATION_FEATURES))
@@ -214,6 +230,7 @@ def run(
         if ablation_result is None
         else {"dropped": ablation_result["dropped"], **summary(ablation_result)},
         "metrics": final,
+        "release_gate": gate_result,
         "metrics_argmax": {k: v for k, v in final_argmax.items() if k != "confusion_matrix"},
         "fit_seconds": fit_seconds,
         "top_features": importance.head(10).round(4).to_dict(),
@@ -240,6 +257,7 @@ def run(
                 "shipped_argmax": final_argmax,
                 "candidates": results,
                 "ablation": ablation_result,
+                "release_gate": gate_result,
                 "dataset": metadata["dataset"],
             },
             indent=2,
@@ -266,6 +284,28 @@ def _pct(value: float) -> str:
     return f"{value * 100:.2f}%"
 
 
+def _gate_section(result: dict | None) -> list[str]:
+    if result is None:
+        return []
+    lines = [
+        f"## Release gate vs {result['reference']}: "
+        f"{'**passed**' if result['passed'] else '**failed**'}",
+        "",
+        "Fixed before evaluation (`sentinel_ml/gate.py`): strictly fewer false positives, and "
+        f"no class losing more than {result['max_recall_drop'] * 100:.0f} points of recall.",
+        "",
+        "| Check | This model | Reference | Result |",
+        "|---|---:|---:|---|",
+    ]
+    for c in result["checks"]:
+        fmt = _pct if c["name"] == "false_positive_rate" else (lambda v: f"{v:.4f}")
+        lines.append(
+            f"| {c['name']} | {fmt(c['candidate'])} | {fmt(c['reference'])} | "
+            f"{'pass' if c['passed'] else 'FAIL'} |"
+        )
+    return [*lines, ""]
+
+
 def render_report(
     metadata: dict,
     results: dict,
@@ -281,7 +321,7 @@ def render_report(
     lines = [
         f"# Model report — {metadata['name']} {metadata['version']}",
         "",
-        f"Selected model: **{selected}** (by validation macro-F1 after decision tuning). "
+        f"Selected model: **{selected}** ({metadata['selection']}). "
         f"Trained {metadata['trained_at'][:19]} UTC in {seconds / 60:.1f} min, "
         f"commit `{(metadata['git_commit'] or 'unknown')[:10]}`.",
         "",
@@ -308,6 +348,7 @@ def render_report(
         "share of benign flows flagged as an attack. *Calibration error*: expected calibration "
         "error of the reported confidence (0 = confidence matches accuracy).",
         "",
+        *_gate_section(metadata.get("release_gate")),
         "## Data",
         "",
         f"CIC-IDS2017 MachineLearningCVE, {len(ds['files'])} files "
