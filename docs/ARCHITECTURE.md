@@ -53,7 +53,7 @@ Design principles:
 | Component | Responsibility | Tech |
 |---|---|---|
 | `engine` (sources) | Sniff an interface or replay a PCAP (speed factor, retimed), or run the safe simulator | Scapy (AsyncSniffer / PcapReader) |
-| `engine` (flow builder) | Aggregate packets to bidirectional flows by 5-tuple; RST/FIN, idle and active timeouts; CICFlowMeter-style features | Python |
+| `engine` (flow builder) | Aggregate packets to bidirectional flows by 5-tuple; RST/FIN and CICFlowMeter's 120 s flow timeout; CICFlowMeter-style features; early previews of open flows for the cross-flow rules | Python |
 | `sentinel_ml.features` | Flow → fixed feature vector (shared with training) | Python package in `ml/` |
 | `engine` (classifier + rules) | Versioned model bundle → class, probability, SHAP top-5; window rule for port scans | scikit-learn, XGBoost, SHAP |
 | `engine` (risk) | Combine signals into 0–100 score; baseline frozen during attacks | Pure Python, weights from the settings API via Redis |

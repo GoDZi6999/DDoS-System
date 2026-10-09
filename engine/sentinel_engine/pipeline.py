@@ -8,6 +8,9 @@
                                                          -> detections (Redis stream)
                                                          -> traffic.tick (pub/sub)
 
+The FlowTable also previews flows still open after a few seconds; previews
+feed only the cross-flow trackers and the flood rule (see flows.py).
+
 The engine clock is the traffic's own timestamps, so PCAP replay and the
 simulator behave exactly like live capture.
 """
@@ -24,7 +27,7 @@ from pathlib import Path
 from sentinel_ml import features
 from sentinel_ml.inference import Predictor
 
-from sentinel_engine.flows import FlowTable
+from sentinel_engine.flows import FLOW_TIMEOUT_S, FlowTable
 from sentinel_engine.packets import Heartbeat, Packet
 from sentinel_engine.risk import RiskEngine
 from sentinel_engine.window import (
@@ -49,6 +52,8 @@ BEACON_REPORT_S = 60.0  # one beaconing detection per pair per minute
 PROTOCOLS = {"tcp", "udp", "icmp"}
 # SHAP explanations per (attack label, destination) per second; see _explain_budget.
 EXPLAIN_PER_TARGET_S = 5
+# A previewed flow ends at most FLOW_TIMEOUT_S after its first packet.
+FLOOD_REPORT_KEEP_S = FLOW_TIMEOUT_S + 60.0
 
 
 def _finite(value: float) -> float:
@@ -88,6 +93,9 @@ class Engine:
         self.model_version = f"{meta['name']}-{meta['version']}"
         self._scan_reported: dict[tuple[str, str], float] = {}
         self._beacon_reported: dict[tuple[str, str, int], float] = {}
+        # Flows the flood rule reported from their preview, so their finished
+        # record is not reported again (insertion-ordered by report time).
+        self._flood_reported: dict[tuple, float] = {}
         self._tick = {"flows": 0, "packets": 0, "attacks": 0, "max_risk": 0}
         self._next_config = 0.0
 
@@ -244,17 +252,67 @@ class Engine:
             ],
         )
 
+    def _flood_detection(self, record: dict, flood: Flood, now: float) -> dict:
+        src, dst = record["src_ip"], record["dst_ip"]
+        rate = self.window.dst_packet_rate(dst)
+        risk, components = self.risk.score(flood.label, FLOOD_CONFIDENCE, src, dst, rate, now)
+        self.risk.record_attack(src, dst, now)
+        detection = self._detection(record, self._flood_verdict(flood), risk, components)
+        detection["model_version"] = RULE_FLOOD
+        return detection
+
+    @staticmethod
+    def _flow_id(record: dict) -> tuple:
+        return (
+            record["src_ip"],
+            record["src_port"],
+            record["dst_ip"],
+            record["dst_port"],
+            record["protocol"],
+            record["start"],
+        )
+
+    def _forget_flood_reports(self, now: float) -> None:
+        reported = self._flood_reported
+        while reported:
+            flow_id = next(iter(reported))
+            if reported[flow_id] >= now - FLOOD_REPORT_KEEP_S:
+                break
+            del reported[flow_id]
+
     def handle_flows(self, records: list[dict], now: float) -> list[dict]:
+        """Previews (flows still open) only feed the cross-flow trackers and
+        the flood rule; finished flows are classified. A flow is counted by
+        the trackers once: by its preview if it had one, else when it ends."""
         self._refresh_config(now)
         for record in records:
+            if record.get("previewed"):
+                continue
             self.window.add(record)
             self.beacons.add(record)
             self.floods.add(record)
         self.window.evict(now)
         self.beacons.evict(now)
         self.floods.evict(now)
+        self._forget_flood_reports(now)
         floods = self.floods.floods()
+
+        def flood_of(record: dict) -> Flood | None:
+            return next(
+                (f for f in floods.get(flood_target(record), ()) if f.includes(record)), None
+            )
+
         detections = []
+        # A long flow of a flood (a half-open SYN, a UDP stream) is reported
+        # from its preview, without waiting up to two minutes for it to end.
+        for record in records:
+            if not record.get("preview"):
+                continue
+            flood = flood_of(record)
+            if flood is not None and self._flow_id(record) not in self._flood_reported:
+                self._flood_reported[self._flow_id(record)] = now
+                detections.append(self._flood_detection(record, flood, now))
+        records = [r for r in records if not r.get("preview")]
         if records:
             frame = features.from_records([r["features"] for r in records])
             predictions = self.predictor.predict(frame, explain="none")
@@ -264,23 +322,15 @@ class Engine:
             for record, prediction in zip(records, predictions, strict=True):
                 src, dst = record["src_ip"], record["dst_ip"]
                 rate = self.window.dst_packet_rate(dst)
-                # The flood rule only relabels flows the model let through.
-                flood = None
+                reported = self._flood_reported.pop(self._flow_id(record), None) is not None
                 if not prediction.is_attack:
-                    flood = next(
-                        (f for f in floods.get(flood_target(record), ()) if f.includes(record)),
-                        None,
-                    )
-                if flood is not None:
-                    prediction = self._flood_verdict(flood)
-                    risk, components = self.risk.score(
-                        flood.label, FLOOD_CONFIDENCE, src, dst, rate, now
-                    )
-                    self.risk.record_attack(src, dst, now)
-                    detection = self._detection(record, prediction, risk, components)
-                    detection["model_version"] = RULE_FLOOD
-                    detections.append(detection)
-                    continue
+                    if reported:
+                        continue  # already reported by the flood rule from its preview
+                    # The flood rule only relabels flows the model let through.
+                    flood = flood_of(record)
+                    if flood is not None:
+                        detections.append(self._flood_detection(record, flood, now))
+                        continue
                 if prediction.is_attack:
                     risk, components = self.risk.score(
                         prediction.label, prediction.confidence, src, dst, rate, now

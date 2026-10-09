@@ -7,7 +7,11 @@ a status hash `sentinel:sensors:<name>` up to date, which the API serves to
 the dashboard.
 
 Stream entry fields: `v` (protocol version), `sensor` (name) and `data`
-(JSON flow record, as produced by flows.Flow.record()). Sensors are remote
+(JSON flow record, as produced by flows.Flow.record()). Version 2 adds the
+optional booleans `preview` (an early look at a flow still open, for the
+cross-flow rules only) and `previewed` (a finished flow whose preview was
+already sent); version 1 entries, such as /v2/flows submissions, are
+finished flows. Sensors are remote
 and only trusted as far as their Redis credentials go, so every entry is
 validated before it reaches the classifier.
 
@@ -27,7 +31,8 @@ from sentinel_engine.packets import Packet
 
 logger = logging.getLogger(__name__)
 
-PROTOCOL_VERSION = 1
+PROTOCOL_VERSION = 2
+ACCEPTED_VERSIONS = {1, 2}
 FLOWS_STREAM = "sentinel:flows"
 FLOWS_MAXLEN = 200_000
 SENSOR_KEY_PREFIX = "sentinel:sensors:"
@@ -86,7 +91,11 @@ def decode(fields: dict, now: float | None = None) -> tuple[str, dict] | None:
         data = json.loads(raw)
     except (ValueError, UnicodeDecodeError):
         return None
-    if version != PROTOCOL_VERSION or not SENSOR_NAME.match(sensor) or not isinstance(data, dict):
+    if (
+        version not in ACCEPTED_VERSIONS
+        or not SENSOR_NAME.match(sensor)
+        or not isinstance(data, dict)
+    ):
         return None
 
     now = time.time() if now is None else now
@@ -115,4 +124,11 @@ def decode(fields: dict, now: float | None = None) -> tuple[str, dict] | None:
             return None
         clean[name] = number
     record["features"] = clean
+    for flag in ("preview", "previewed"):
+        value = data.get(flag, False)
+        if not isinstance(value, bool) or (value and version < 2):
+            return None
+        record[flag] = value
+    if record["preview"] and record["previewed"]:
+        return None
     return sensor, record
