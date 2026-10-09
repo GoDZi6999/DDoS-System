@@ -105,7 +105,7 @@ traffic out.
 
 ## Cross-flow rules
 
-Some attacks only show across many flows, so two rules run next to the classifier.
+Some attacks only show across many flows, so three rules run next to the classifier.
 Their detections carry `model_version: rule:<name>` and are explained by the evidence
 that triggered them.
 
@@ -113,6 +113,22 @@ that triggered them.
 |---|---|---|---|
 | `rule:portscan-v1` | one source reaches ≥ 20 distinct ports on a host within 10 s | portscan | once per pair per 10 s |
 | `rule:beacon-v1` | one source contacts the same server and port ≥ 8 times within 5 min, at intervals of ≥ 1 s that vary by ≤ 20% (std/mean) | botnet | once per pair per minute |
+| `rule:flood-v1` | within 10 s, one TCP service receives ≥ 20 half-open flows/s (SYN with no completed handshake), or one target receives ≥ 50 flows/s from sources that each opened ≥ 20 (UDP and other protocols are grouped per host, across ports) | ddos (≥ 3 sources), else dos | every flood flow the model called benign |
+
+The flood rule exists because the classifier learned CIC-IDS2017's floods,
+which were mostly captured mid-stream: the same flood with every TCP handshake
+in the capture, or a plain SYN flood, looks benign to it
+([`docs/ML_METHODOLOGY.md`](../docs/ML_METHODOLOGY.md#7-threats-to-validity)).
+Rather than adding one summary detection, it relabels each flood flow the model
+let through, so the alert's flows, top sources and packet evidence cover the
+whole flood; flows the model already flagged keep the model's verdict. A
+server's ordinary clients are not counted (a busy site with many light clients
+is not a flood), but the thresholds are absolute: a proxy or load balancer
+that legitimately opens more than 50 connections per second to one backend
+needs them raised (`FLOOD_*` in `window.py`). Known gaps: a flood carried by
+one long-lived flow (an ICMP ping flood, one UDP 5-tuple) only reaches the
+rule when the flow ends, and the first seconds of a flood, before it crosses
+the threshold, keep the model's verdict.
 
 The beaconing rule covers the classifier's least stable class: botnet recall on the
 test set ranges from 0.68 to 0.92 across training recipes

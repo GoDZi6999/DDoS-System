@@ -157,10 +157,15 @@ sizes, then inter-arrival-time statistics and packet sizes.
   flood (one-packet flows). SHAP on the detected shape ranks the server's and
   client's initial TCP windows first. Real captures usually contain the
   handshakes, so floods can be missed. This supports the shortcut concern
-  above and makes the flow-builder parity check and a flood-rate rule the
-  next priorities. `python -m app.cli demo-capture` builds the mid-stream
-  shape on purpose, so the demo exercises the pipeline rather than this
-  weakness.
+  above and makes the flow-builder parity check the next priority. The engine
+  now backs the model with a model-independent flood rule (`rule:flood-v1`,
+  see [`engine/README.md`](../engine/README.md#cross-flow-rules)) that relabels
+  flows the model called benign when one target receives a flood of new
+  connections or half-open SYNs; in the engine's tests it catches both missed
+  shapes. Like the other rules it is not part of the classifier's gate and has
+  not been measured on labelled traffic. `python -m app.cli demo-capture`
+  contains one flood of each kind: an HTTP flood in the mid-stream shape the
+  model catches and a SYN flood only the rule catches.
 - **Adversarial robustness** is not evaluated: crafted traffic can evade
   flow-statistics models.
 - SHAP explains the model's reasoning, not ground-truth causality.

@@ -108,8 +108,10 @@ appear in **Alerts**; each such alert has a **Wireshark** card with a display
 filter and **Download packets (.pcap)**, which opens the alert's packets in
 Wireshark with their original timestamps.
 
-No capture at hand? Generate a synthetic one (web traffic, a port scan and an
-HTTP flood):
+No capture at hand? Generate a synthetic one (web traffic, a port scan, an
+HTTP flood and a SYN flood). The report's **Detected by** list shows the model
+catching the HTTP flood and the flood rule catching the SYN flood, which the
+model alone calls benign:
 
 ```bash
 docker compose exec -T backend python -m app.cli demo-capture - > demo.pcap

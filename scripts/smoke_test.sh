@@ -153,6 +153,9 @@ done
 attacks="$(json_field '["report"]["attack_types"]' <<<"$capture")"
 echo "   attack detections: $attacks"
 grep -q "ddos" <<<"$attacks" || fail "the demo capture's HTTP flood was not detected"
+detectors="$(json_field '["report"]["detected_by"]' <<<"$capture")"
+echo "   detected by: $detectors"
+grep -q "rule:flood-v1" <<<"$detectors" || fail "the demo capture's SYN flood was not caught by the flood rule"
 evidence_alert=""
 for _ in $(seq 1 30); do
   for id in $(curl -fsS "${auth[@]}" "$BACKEND_URL/api/v1/alerts?attack_type=ddos&limit=50" \

@@ -18,6 +18,6 @@ class CaptureOut(ORMModel):
     created_at: datetime
     started_at: datetime | None
     finished_at: datetime | None
-    # packets, flows, attacks, attack_types, top_sources, top_targets, max_risk,
+    # packets, flows, attacks, attack_types, detected_by, top_sources, top_targets, max_risk,
     # first_packet_at, last_packet_at, duration_s, analysis_s, model_version
     report: dict[str, Any] | None

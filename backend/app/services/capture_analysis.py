@@ -80,6 +80,7 @@ class _CapturePublisher:
         self.forward = forward
         self.flows = 0
         self.labels: Counter[str] = Counter()
+        self.detectors: Counter[str] = Counter()  # model or rule:<name>
         self.sources: Counter[str] = Counter()
         self.targets: Counter[str] = Counter()
         self.max_risk = 0
@@ -91,6 +92,8 @@ class _CapturePublisher:
             if item["label"] == BENIGN:
                 continue
             self.labels[item["label"]] += 1
+            version = item["model_version"]
+            self.detectors[version if version.startswith("rule:") else "model"] += 1
             self.sources[item["src_ip"]] += 1
             port = item["dst_port"]
             self.targets[f"{item['dst_ip']}:{port}" if port else item["dst_ip"]] += 1
@@ -148,6 +151,7 @@ def analyze(
             "flows": publisher.flows,
             "attacks": attacks,
             "attack_types": dict(publisher.labels.most_common()),
+            "detected_by": dict(publisher.detectors.most_common()),
             "top_sources": [
                 {"ip": ip, "detections": n} for ip, n in publisher.sources.most_common(TOP_N)
             ],

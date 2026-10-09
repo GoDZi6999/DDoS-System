@@ -5,7 +5,8 @@ port scan is one source touching many ports, a DDoS is many sources hitting
 one destination. This window (default 10 s) tracks those aggregates for the
 risk engine and drives the explicit port-scan rule, which covers the
 classifier's weakest class (see docs/ML_METHODOLOGY.md). A longer per-pair
-history (BeaconTracker) drives the botnet beaconing rule.
+history (BeaconTracker) drives the botnet beaconing rule, and new flows per
+target (FloodTracker) drive the flood rule.
 """
 
 from collections import Counter, defaultdict, deque
@@ -168,3 +169,137 @@ class BeaconTracker:
             if jitter <= self.max_jitter:
                 found.append(Beacon(src, dst, dport, len(times), mean, jitter))
         return found
+
+
+# Floods: the classifier learned CIC-IDS2017's floods, whose captures mostly
+# miss each connection's handshake, so a flood with full handshakes or a plain
+# SYN flood looks benign to it (docs/ML_METHODOLOGY.md, section 7). This rule
+# counts new flows per target instead, which does not depend on flow shape.
+FLOOD_WINDOW_S = 10.0
+# Half-open TCP flows (SYN, then no ACK from the client) to one service.
+FLOOD_MIN_HALF_OPEN_PER_S = 20.0
+# Completed connections (or UDP flows) to one target...
+FLOOD_MIN_FLOWS_PER_S = 50.0
+# ... counted only from sources that each opened this many in the window, so a
+# busy server's ordinary clients are not counted (or labelled) with the flood.
+FLOOD_MIN_FLOWS_PER_SOURCE = 20
+# A flood from at least this many sources is distributed (ddos), else dos.
+FLOOD_DDOS_MIN_SOURCES = 3
+FLOOD_HISTORY = 100_000  # flows kept per target, so memory stays bounded
+
+
+def flood_target(record: dict) -> tuple[str, int, str]:
+    """TCP floods hit one service; UDP floods often spray ports, so UDP and
+    other protocols are grouped by host (port 0)."""
+    protocol = record["protocol"]
+    port = int(record["dst_port"]) if protocol == "tcp" else 0
+    return record["dst_ip"], port, protocol
+
+
+def is_half_open(record: dict) -> bool:
+    """A TCP flow that never completed its handshake: a SYN, at most the
+    server's SYN-ACK in return (one ACK flag), and no client data."""
+    features = record["features"]
+    return (
+        record["protocol"] == "tcp"
+        and features.get("syn_flag_count", 0) >= 1
+        and features.get("ack_flag_count", 0) <= 1
+        and features.get("fwd_bytes", 0) == 0
+    )
+
+
+@dataclass(frozen=True)
+class Flood:
+    dst: str
+    dport: int
+    protocol: str
+    kind: str  # syn | connection
+    flows: int  # flows counted towards the flood in the window
+    flows_per_s: float
+    sources: int
+    top_source: str
+    label: str  # ddos | dos
+    heavy_sources: frozenset[str] = frozenset()  # connection floods only
+
+    def includes(self, record: dict) -> bool:
+        """Whether a flow to this target is part of the flood."""
+        if self.kind == "syn":
+            return is_half_open(record)
+        return not is_half_open(record) and record["src_ip"] in self.heavy_sources
+
+
+class FloodTracker:
+    """New flows per target over a short window, split into half-open and
+    other flows, with per-source counts.
+
+    Thresholds are absolute, so a server that legitimately takes more than
+    FLOOD_MIN_FLOWS_PER_S connections per second from a few heavy clients
+    (a load balancer, a proxy) needs them raised or its sources allowed."""
+
+    def __init__(
+        self,
+        window_s: float = FLOOD_WINDOW_S,
+        min_half_open_per_s: float = FLOOD_MIN_HALF_OPEN_PER_S,
+        min_flows_per_s: float = FLOOD_MIN_FLOWS_PER_S,
+    ) -> None:
+        self.window_s = window_s
+        self.min_half_open = min_half_open_per_s * window_s
+        self.min_flows = min_flows_per_s * window_s
+        self._flows: dict[tuple[str, int, str], deque[tuple[float, str, bool]]] = defaultdict(
+            lambda: deque(maxlen=FLOOD_HISTORY)
+        )
+        self._half_open: dict[tuple[str, int, str], Counter[str]] = defaultdict(Counter)
+        self._other: dict[tuple[str, int, str], Counter[str]] = defaultdict(Counter)
+
+    def add(self, record: dict) -> None:
+        key = flood_target(record)
+        flows = self._flows[key]
+        if len(flows) == flows.maxlen:
+            self._forget(key, *flows[0])
+        half_open = is_half_open(record)
+        flows.append((float(record["end"]), record["src_ip"], half_open))
+        (self._half_open if half_open else self._other)[key][record["src_ip"]] += 1
+
+    def _forget(self, key, _ts: float, src: str, half_open: bool) -> None:
+        counts = (self._half_open if half_open else self._other)[key]
+        counts[src] -= 1
+        if counts[src] <= 0:
+            del counts[src]
+
+    def evict(self, now: float) -> None:
+        for key in list(self._flows):
+            flows = self._flows[key]
+            while flows and flows[0][0] < now - self.window_s:
+                self._forget(key, *flows.popleft())
+            if not flows:
+                del self._flows[key]
+                self._half_open.pop(key, None)
+                self._other.pop(key, None)
+
+    def floods(self) -> dict[tuple[str, int, str], list[Flood]]:
+        found: dict[tuple[str, int, str], list[Flood]] = {}
+        for key, half_open in self._half_open.items():
+            total = sum(half_open.values())
+            if total >= self.min_half_open:
+                found.setdefault(key, []).append(self._flood(key, "syn", half_open))
+        for key, other in self._other.items():
+            heavy = Counter({src: n for src, n in other.items() if n >= FLOOD_MIN_FLOWS_PER_SOURCE})
+            if sum(heavy.values()) >= self.min_flows:
+                found.setdefault(key, []).append(self._flood(key, "connection", heavy))
+        return found
+
+    def _flood(self, key, kind: str, counts: Counter[str]) -> Flood:
+        dst, dport, protocol = key
+        flows = sum(counts.values())
+        return Flood(
+            dst=dst,
+            dport=dport,
+            protocol=protocol,
+            kind=kind,
+            flows=flows,
+            flows_per_s=flows / self.window_s,
+            sources=len(counts),
+            top_source=counts.most_common(1)[0][0],
+            label="ddos" if len(counts) >= FLOOD_DDOS_MIN_SOURCES else "dos",
+            heavy_sources=frozenset(counts) if kind == "connection" else frozenset(),
+        )
