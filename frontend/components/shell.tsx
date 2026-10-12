@@ -16,6 +16,7 @@ import {
   TerminalIcon,
   UsersIcon,
 } from "@/components/icons";
+import { ThemeToggle } from "@/components/theme-toggle";
 import { useLive, type LiveStatus } from "@/lib/live";
 import { hasRole, useMe } from "@/lib/user";
 import type { Role, StatsSummary } from "@/lib/types";
@@ -181,6 +182,7 @@ export function Shell({ children }: { children: React.ReactNode }) {
                   </span>
                 </span>
               )}
+              <ThemeToggle />
               <form action={logoutAction}>
                 <button
                   type="submit"

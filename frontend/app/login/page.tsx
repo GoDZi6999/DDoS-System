@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import { ShieldIcon } from "@/components/icons";
+import { ThemeToggle } from "@/components/theme-toggle";
 import { LoginForm } from "./login-form";
 
 export const metadata: Metadata = { title: "Sign in · ArgusAI" };
@@ -69,7 +70,8 @@ export default async function LoginPage({ searchParams }: PageProps<"/login">) {
         </dl>
       </section>
 
-      <section className="flex items-center justify-center px-4 py-16">
+      <section className="relative flex items-center justify-center px-4 py-16">
+        <ThemeToggle className="absolute right-4 top-4" />
         <div className="w-full max-w-sm">
           <div className="mb-8 flex items-center gap-3">
             <span className="grid size-11 place-items-center rounded-sm border border-accent/50 bg-accent/10 text-accent shadow-[0_0_24px_-6px_var(--accent)]">

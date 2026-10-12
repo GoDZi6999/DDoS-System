@@ -1,6 +1,7 @@
 import type { Metadata, Viewport } from "next";
 import localFont from "next/font/local";
 import "./globals.css";
+import { THEME_SCRIPT } from "@/lib/theme";
 
 // Fonts are vendored (app/fonts, SIL Open Font License) so builds need no
 // network access and the same-origin CSP (font-src 'self') holds.
@@ -28,15 +29,26 @@ export const metadata: Metadata = {
   description: "Real-time network threat detection and security monitoring",
 };
 
-export const viewport: Viewport = { themeColor: "#04070c", colorScheme: "dark" };
+export const viewport: Viewport = {
+  themeColor: [
+    { media: "(prefers-color-scheme: light)", color: "#eef3f8" },
+    { media: "(prefers-color-scheme: dark)", color: "#04070c" },
+  ],
+  colorScheme: "dark light",
+};
 
 export default function RootLayout({ children }: LayoutProps<"/">) {
   return (
     <html
       lang="en"
       data-theme="dark"
+      // THEME_SCRIPT may switch data-theme before React hydrates.
+      suppressHydrationWarning
       className={`${display.variable} ${body.variable} ${mono.variable} h-full antialiased`}
     >
+      <head>
+        <script dangerouslySetInnerHTML={{ __html: THEME_SCRIPT }} />
+      </head>
       <body className="flex min-h-full flex-col font-sans">{children}</body>
     </html>
   );
