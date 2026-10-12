@@ -1,10 +1,13 @@
 @import "tailwindcss";
 
-/* ArgusAI SOC console theme (dark only).
-   Chart colours: benign #1a9fd6 and attack #e8394a, validated against the
-   panel surface (lightness band, CVD separation, contrast). Status colours
-   always appear with a text label and a glyph, never alone. */
-:root {
+/* ArgusAI SOC console themes. Dark is the default; light is chosen from the
+   viewer's system setting or the header toggle (lib/theme.tsx), which sets
+   data-theme on <html> before first paint.
+   Chart colours: benign series-1 and attack status-critical, validated against
+   each theme's panel surface (lightness band, CVD separation, contrast).
+   Status colours always appear with a text label and a glyph, never alone. */
+:root,
+[data-theme="dark"] {
   color-scheme: dark;
   --page: #04070c;
   --surface: #0a111c;
@@ -26,6 +29,57 @@
   --status-serious: #f08a3c;
   --status-critical: #e8394a;
   --status-neutral: #7d8da1;
+  /* Effects */
+  --page-glow: rgba(34, 211, 238, 0.09);
+  --hud-top: rgba(15, 25, 40, 0.92);
+  --hud-bottom: rgba(10, 17, 28, 0.92);
+  --hud-highlight: rgba(103, 232, 249, 0.06);
+  --hud-shadow: rgba(0, 0, 0, 0.9);
+  --critical-edge: rgba(232, 57, 74, 0.55);
+  --critical-ring: rgba(232, 57, 74, 0.15);
+  --critical-glow: rgba(232, 57, 74, 0.45);
+  --text-glow: rgba(34, 211, 238, 0.45);
+  --scan: rgba(34, 211, 238, 0.06);
+  --selection: rgba(34, 211, 238, 0.3);
+  --scrollbar: rgba(56, 189, 248, 0.25);
+}
+
+/* Daylight console: same layout and HUD frame on a pale slate page, with
+   colours darkened to keep text and status glyphs at WCAG AA on white. */
+[data-theme="light"] {
+  color-scheme: light;
+  --page: #eef3f8;
+  --surface: #ffffff;
+  --surface-raised: #f6f9fc;
+  --surface-sunken: #e4ebf2;
+  --border: rgba(14, 116, 144, 0.2);
+  --border-strong: rgba(14, 116, 144, 0.42);
+  --text-primary: #0b1726;
+  --text-secondary: #34475d;
+  --text-muted: #56677b;
+  --grid: rgba(30, 70, 110, 0.08);
+  --axis: rgba(30, 70, 110, 0.3);
+  --accent: #0e7490;
+  --accent-strong: #155e75;
+  --live: #047857;
+  --series-1: #0b7fb5;
+  --status-good: #15803d;
+  --status-warning: #b45309;
+  --status-serious: #c2410c;
+  --status-critical: #cf2338;
+  --status-neutral: #64748b;
+  --page-glow: rgba(14, 116, 144, 0.08);
+  --hud-top: rgba(255, 255, 255, 0.96);
+  --hud-bottom: rgba(248, 251, 253, 0.96);
+  --hud-highlight: rgba(255, 255, 255, 0.9);
+  --hud-shadow: rgba(15, 40, 70, 0.28);
+  --critical-edge: rgba(207, 35, 56, 0.5);
+  --critical-ring: rgba(207, 35, 56, 0.1);
+  --critical-glow: rgba(207, 35, 56, 0.25);
+  --text-glow: transparent;
+  --scan: rgba(14, 116, 144, 0.05);
+  --selection: rgba(14, 116, 144, 0.22);
+  --scrollbar: rgba(14, 116, 144, 0.3);
 }
 
 @theme inline {
@@ -59,7 +113,7 @@ body {
   background-color: var(--page);
   /* Faint targeting grid with a cool glow from the top. */
   background-image:
-    radial-gradient(ellipse 80% 50% at 50% -10%, rgba(34, 211, 238, 0.09), transparent 70%),
+    radial-gradient(ellipse 80% 50% at 50% -10%, var(--page-glow), transparent 70%),
     linear-gradient(var(--grid) 1px, transparent 1px),
     linear-gradient(90deg, var(--grid) 1px, transparent 1px);
   background-size:
@@ -70,7 +124,7 @@ body {
 }
 
 ::selection {
-  background: rgba(34, 211, 238, 0.3);
+  background: var(--selection);
 }
 
 .tabular {
@@ -88,11 +142,11 @@ body {
 /* HUD panel: dark glass with corner brackets. */
 .hud {
   position: relative;
-  background: linear-gradient(180deg, rgba(15, 25, 40, 0.92), rgba(10, 17, 28, 0.92));
+  background: linear-gradient(180deg, var(--hud-top), var(--hud-bottom));
   border: 1px solid var(--border);
   box-shadow:
-    inset 0 1px 0 rgba(103, 232, 249, 0.06),
-    0 10px 30px -18px rgba(0, 0, 0, 0.9);
+    inset 0 1px 0 var(--hud-highlight),
+    0 10px 30px -18px var(--hud-shadow);
   backdrop-filter: blur(4px);
 }
 .hud::before,
@@ -119,10 +173,10 @@ body {
 }
 
 .hud-critical {
-  border-color: rgba(232, 57, 74, 0.55);
+  border-color: var(--critical-edge);
   box-shadow:
-    0 0 0 1px rgba(232, 57, 74, 0.15),
-    0 0 28px -6px rgba(232, 57, 74, 0.45);
+    0 0 0 1px var(--critical-ring),
+    0 0 28px -6px var(--critical-glow);
 }
 .hud-critical::before,
 .hud-critical::after {
@@ -130,7 +184,7 @@ body {
 }
 
 .glow-text {
-  text-shadow: 0 0 18px rgba(34, 211, 238, 0.45);
+  text-shadow: 0 0 18px var(--text-glow);
 }
 
 /* Live indicator and attention pulses; disabled for reduced motion. */
@@ -169,7 +223,7 @@ body {
   left: 0;
   right: 0;
   height: 40%;
-  background: linear-gradient(180deg, transparent, rgba(34, 211, 238, 0.06), transparent);
+  background: linear-gradient(180deg, transparent, var(--scan), transparent);
   animation: scan 6s linear infinite;
 }
 
@@ -209,5 +263,5 @@ body {
 /* Thin, themed scrollbars for tables and the event feed. */
 * {
   scrollbar-width: thin;
-  scrollbar-color: rgba(56, 189, 248, 0.25) transparent;
+  scrollbar-color: var(--scrollbar) transparent;
 }
